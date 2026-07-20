@@ -1,0 +1,12 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-white text-gray-900 antialiased;
+}
+
+/* small utility for subtle card shadow */
+.card-shadow {
+  box-shadow: 0 6px 18px rgba(17,24,39,0.06);
+}
