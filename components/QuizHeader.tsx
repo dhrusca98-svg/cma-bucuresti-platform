@@ -1,3 +1,4 @@
+import ProgressBar from "./ProgressBar";
 interface QuizHeaderProps {
   currentQuestion: number;
   totalQuestions: number;
@@ -14,6 +15,10 @@ export default function QuizHeader({
       <div className="flex items-center justify-between">
         <p className="text-sm font-medium text-gray-500">
           Întrebarea {currentQuestion} din {totalQuestions}
+          <ProgressBar
+  current={currentQuestion}
+  total={totalQuestions}
+/>
         </p>
 
         <p className="text-sm font-medium text-green-700">
