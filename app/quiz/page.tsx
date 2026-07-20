@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import AnswerButton from "@/components/AnswerButton";
 import ExplanationCard from "@/components/ExplanationCard";
 import QuizHeader from "@/components/QuizHeader";
@@ -45,6 +45,47 @@ export default function QuizPage() {
     setScore(0);
     setIsFinished(false);
   }
+
+useEffect(() => {
+  function handleKeyDown(event: KeyboardEvent) {
+    if (isFinished) return;
+
+    const pressedKey = event.key.toLowerCase();
+
+    if (!isConfirmed) {
+      const answerIndex = ["a", "b", "c", "d"].indexOf(pressedKey);
+
+      if (
+        answerIndex !== -1 &&
+        answerIndex < question.answers.length
+      ) {
+        setSelectedAnswer(answerIndex);
+      }
+
+      if (event.key === "Enter" && selectedAnswer !== null) {
+        handleConfirm();
+      }
+
+      return;
+    }
+
+    if (event.code === "Space") {
+      event.preventDefault();
+      handleNextQuestion();
+    }
+  }
+
+  window.addEventListener("keydown", handleKeyDown);
+
+  return () => {
+    window.removeEventListener("keydown", handleKeyDown);
+  };
+}, [
+  isConfirmed,
+  isFinished,
+  selectedAnswer,
+  currentQuestionIndex,
+]);
 
   if (isFinished) {
     return (
