@@ -5,11 +5,22 @@ import {
   useRouter,
   useSearchParams,
 } from "next/navigation";
-import { useState } from "react";
+import {
+  Suspense,
+  useState,
+} from "react";
 
 import { signIn } from "@/lib/supabase/auth";
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginLoading />}>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -17,7 +28,8 @@ export default function LoginPage() {
     searchParams.get("next") || "/";
 
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [password, setPassword] =
+    useState("");
 
   const [loading, setLoading] =
     useState(false);
@@ -150,6 +162,16 @@ export default function LoginPage() {
             ← Înapoi la pagina principală
           </Link>
         </div>
+      </div>
+    </main>
+  );
+}
+
+function LoginLoading() {
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-[#07100b] px-5">
+      <div className="rounded-2xl border border-white/10 bg-black/60 px-8 py-6 text-gray-300 shadow-2xl">
+        Se încarcă...
       </div>
     </main>
   );

@@ -1,0 +1,30 @@
+
+> cma-bucuresti-platform@0.1.0 build
+> next build
+
+▲ Next.js 16.2.10 (Turbopack)
+- Environments: .env.local
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 10.9s
+  Running TypeScript ...
+  Finished TypeScript in 6.0s ...
+  Collecting page data using 1 worker ...
+  Generating static pages using 1 worker (0/20) ...
+  Generating static pages using 1 worker (5/20) 
+  Generating static pages using 1 worker (10/20) 
+  Generating static pages using 1 worker (15/20) 
+⨯ useSearchParams() should be wrapped in a suspense boundary at page "/login". Read more: https://nextjs.org/docs/messages/missing-suspense-with-csr-bailout
+    at S (/workspaces/cma-bucuresti-platform/.next/server/chunks/ssr/node_modules_next_1iemwhs._.js:2:2692)
+    at r (/workspaces/cma-bucuresti-platform/.next/server/chunks/ssr/node_modules_next_1iemwhs._.js:4:6760)
+    at /workspaces/cma-bucuresti-platform/.next/server/chunks/ssr/_08vve_v._.js:1:2583
+    at an (/workspaces/cma-bucuresti-platform/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:84267)
+    at ai (/workspaces/cma-bucuresti-platform/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:86086)
+    at al (/workspaces/cma-bucuresti-platform/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:107860)
+    at as (/workspaces/cma-bucuresti-platform/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:105275)
+    at aa (/workspaces/cma-bucuresti-platform/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:84619)
+    at ai (/workspaces/cma-bucuresti-platform/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:86135)
+    at ai (/workspaces/cma-bucuresti-platform/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:104615)
+Error occurred prerendering page "/login". Read more: https://nextjs.org/docs/messages/prerender-error
+Export encountered an error on /login/page: /login, exiting the build.
+⨯ Next.js build worker exited with code: 1 and signal: null
