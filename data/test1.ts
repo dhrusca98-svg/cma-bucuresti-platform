@@ -1,4 +1,4 @@
-export const quiz1 = [
+export const test1 = [
   {
     id: 1,
     law: 8,
