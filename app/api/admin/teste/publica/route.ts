@@ -157,3 +157,132 @@ export async function POST(request: Request) {
     );
   }
 }
+
+export async function DELETE(request: Request) {
+  try {
+    const adminResult =
+      await requireAdministrator(request);
+
+    if (adminResult.errorResponse) {
+      return adminResult.errorResponse;
+    }
+
+    const { adminClient } = adminResult;
+
+    const body = (await request.json()) as {
+      testId?: string;
+    };
+
+    const testId = body.testId?.trim();
+
+    if (!testId) {
+      return Response.json(
+        { error: "Lipsește testul selectat." },
+        { status: 400 }
+      );
+    }
+
+    const {
+      data: selectedTest,
+      error: selectedTestError,
+    } = await adminClient
+      .from("tests")
+      .select("id, title, is_active")
+      .eq("id", testId)
+      .maybeSingle();
+
+    if (selectedTestError) {
+      throw new Error(
+        selectedTestError.message
+      );
+    }
+
+    if (!selectedTest) {
+      return Response.json(
+        { error: "Testul selectat nu există." },
+        { status: 404 }
+      );
+    }
+
+    if (selectedTest.is_active === true) {
+      return Response.json(
+        {
+          error:
+            "Testul activ nu poate fi șters. Publică mai întâi alt test.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const {
+      count: attemptCount,
+      error: attemptCountError,
+    } = await adminClient
+      .from("attempts")
+      .select("id", {
+        count: "exact",
+        head: true,
+      })
+      .eq("test_id", testId);
+
+    if (attemptCountError) {
+      throw new Error(
+        attemptCountError.message
+      );
+    }
+
+    if ((attemptCount ?? 0) > 0) {
+      return Response.json(
+        {
+          error:
+            "Testul nu poate fi șters deoarece are deja rezultate salvate.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const { error: questionsDeleteError } =
+      await adminClient
+        .from("questions")
+        .delete()
+        .eq("test_id", testId);
+
+    if (questionsDeleteError) {
+      throw new Error(
+        questionsDeleteError.message
+      );
+    }
+
+    const { error: testDeleteError } =
+      await adminClient
+        .from("tests")
+        .delete()
+        .eq("id", testId);
+
+    if (testDeleteError) {
+      throw new Error(
+        testDeleteError.message
+      );
+    }
+
+    return Response.json({
+      success: true,
+      message: `„${selectedTest.title}” a fost șters.`,
+    });
+  } catch (error) {
+    console.error(
+      "Eroare la ștergerea testului:",
+      error
+    );
+
+    return Response.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Testul nu a putut fi șters.",
+      },
+      { status: 500 }
+    );
+  }
+}

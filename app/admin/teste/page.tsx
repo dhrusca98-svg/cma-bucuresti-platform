@@ -26,6 +26,9 @@ export default function AdminTestsPage() {
   const [publishingId, setPublishingId] =
     useState<string | null>(null);
 
+  const [deletingId, setDeletingId] =
+    useState<string | null>(null);
+
   const [search, setSearch] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -177,6 +180,92 @@ export default function AdminTestsPage() {
       );
     } finally {
       setPublishingId(null);
+    }
+  }
+
+  async function handleDelete(test: AdminTest) {
+    if (test.isActive) {
+      setError(
+        "Testul activ nu poate fi șters."
+      );
+      return;
+    }
+
+    if (test.attemptCount > 0) {
+      setError(
+        "Testul nu poate fi șters deoarece are deja rezultate salvate."
+      );
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Ești sigur că vrei să ștergi testul „${test.title}”?\n\nTestul și toate întrebările lui vor fi șterse definitiv.`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setDeletingId(test.id);
+    setError("");
+    setSuccess("");
+
+    try {
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+
+      if (
+        sessionError ||
+        !session?.access_token
+      ) {
+        throw new Error(
+          "Trebuie să fii autentificat ca administrator."
+        );
+      }
+
+      const response = await fetch(
+        "/api/admin/teste/publica",
+        {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            testId: test.id,
+          }),
+        }
+      );
+
+      const result = (await response.json()) as {
+        success?: boolean;
+        message?: string;
+        error?: string;
+      };
+
+      if (!response.ok || result.error) {
+        throw new Error(
+          result.error ||
+            "Testul nu a putut fi șters."
+        );
+      }
+
+      setSuccess(
+        result.message ||
+          "Testul a fost șters."
+      );
+
+      await loadTests();
+    } catch (deleteError) {
+      setError(
+        deleteError instanceof Error
+          ? deleteError.message
+          : "Testul nu a putut fi șters."
+      );
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -334,33 +423,58 @@ export default function AdminTestsPage() {
 
                   <div className="flex flex-wrap gap-3">
                     {test.isActive ? (
-                      <Link
-                        href="/test"
-                        className="rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
-                      >
-                        Previzualizează
-                      </Link>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handlePublish(test)
-                        }
-                        disabled={
-                          publishingId !== null
-                        }
-                        className="rounded-xl bg-green-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-400"
-                      >
-                        {publishingId === test.id
-                          ? "Se publică..."
-                          : "Publică"}
-                      </button>
-                    )}
+                      <>
+                        <Link
+                          href="/test"
+                          className="rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+                        >
+                          Previzualizează
+                        </Link>
 
-                    {test.isActive && (
-                      <span className="inline-flex items-center rounded-xl bg-green-100 px-4 py-2.5 text-sm font-semibold text-green-700">
-                        Test activ
-                      </span>
+                        <span className="inline-flex items-center rounded-xl bg-green-100 px-4 py-2.5 text-sm font-semibold text-green-700">
+                          Test activ
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handlePublish(test)
+                          }
+                          disabled={
+                            publishingId !== null ||
+                            deletingId !== null
+                          }
+                          className="rounded-xl bg-green-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-400"
+                        >
+                          {publishingId === test.id
+                            ? "Se publică..."
+                            : "Publică"}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleDelete(test)
+                          }
+                          disabled={
+                            deletingId !== null ||
+                            publishingId !== null ||
+                            test.attemptCount > 0
+                          }
+                          title={
+                            test.attemptCount > 0
+                              ? "Testele cu rezultate nu pot fi șterse."
+                              : "Șterge testul"
+                          }
+                          className="rounded-xl border border-red-300 bg-white px-4 py-2.5 text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:border-gray-200 disabled:text-gray-400 disabled:hover:bg-white"
+                        >
+                          {deletingId === test.id
+                            ? "Se șterge..."
+                            : "Șterge"}
+                        </button>
+                      </>
                     )}
                   </div>
                 </article>

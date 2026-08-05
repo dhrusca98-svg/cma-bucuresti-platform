@@ -130,6 +130,14 @@ export default function NewTestPage() {
       return;
     }
 
+    const excelTitle = file.name
+      .replace(/\.(xlsx|xls)$/i, "")
+      .trim();
+
+    if (excelTitle) {
+      setTitle(excelTitle);
+    }
+
     setImportMessage("");
     setImportError("");
     setSaveMessage("");
