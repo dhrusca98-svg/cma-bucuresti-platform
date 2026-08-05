@@ -1,86 +1,115 @@
 import Link from "next/link";
 
+const adminSections = [
+  {
+    title: "Teste",
+    description:
+      "Vezi toate testele create, publică testul activ și verifică istoricul testelor.",
+    href: "/admin/teste",
+    action: "Vezi testele",
+  },
+  {
+    title: "Creează test",
+    description:
+      "Adaugă manual întrebările sau importă un fișier Excel și publică testul.",
+    href: "/admin/teste/nou",
+    action: "Creează test",
+  },
+  {
+    title: "Participanți",
+    description:
+      "Importă și sincronizează lista arbitrilor și gestionează conturile de autentificare.",
+    href: "/admin/participanti",
+    action: "Gestionează participanții",
+  },
+  {
+    title: "Rezultate",
+    description:
+      "Vezi cine a susținut testul activ, scorurile, participarea și statisticile.",
+    href: "/admin/rezultate",
+    action: "Vezi rezultatele",
+  },
+];
+
 export default function AdminPage() {
   return (
     <main className="min-h-screen bg-gray-50 px-4 py-10 sm:px-6">
       <div className="mx-auto max-w-6xl">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-green-700">
               Administrare
             </p>
 
             <h1 className="mt-2 text-3xl font-bold text-gray-900">
-              Teste teoretice
+              Panou de administrare
             </h1>
 
-            <p className="mt-2 text-gray-600">
-              Creează, verifică și publică testele disponibile pe platformă.
+            <p className="mt-2 max-w-2xl text-gray-600">
+              Administrează testele, participanții și rezultatele platformei.
             </p>
           </div>
 
           <Link
-            href="/admin/teste/nou"
-            className="inline-flex items-center justify-center rounded-xl bg-green-600 px-5 py-3 font-semibold text-white transition hover:bg-green-700 focus:outline-none focus:ring-4 focus:ring-green-200"
+            href="/"
+            className="inline-flex items-center justify-center rounded-xl border border-gray-300 bg-white px-5 py-3 font-semibold text-gray-700 transition hover:bg-gray-100"
           >
-            Creează test
+            Înapoi la homepage
           </Link>
         </div>
 
-        <section className="mt-10 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-          <div className="border-b border-gray-200 px-6 py-5">
-            <h2 className="text-lg font-bold text-gray-900">
-              Teste disponibile
-            </h2>
-          </div>
+        <section className="mt-10 grid gap-6 sm:grid-cols-2">
+          {adminSections.map((section) => (
+            <article
+              key={section.href}
+              className="flex flex-col rounded-2xl border border-gray-200 bg-white p-6 shadow-sm"
+            >
+              <h2 className="text-xl font-bold text-gray-900">
+                {section.title}
+              </h2>
 
-          <div className="divide-y divide-gray-200">
-            <article className="flex flex-col gap-5 px-6 py-6 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <div className="flex flex-wrap items-center gap-3">
-                  <h3 className="text-lg font-bold text-gray-900">
-                    Test teoretic nr. 1
-                  </h3>
+              <p className="mt-3 flex-1 text-sm leading-6 text-gray-600">
+                {section.description}
+              </p>
 
-                  <span className="rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
-                    Activ
-                  </span>
-                </div>
-
-                <p className="mt-2 text-sm text-gray-600">
-                  10 întrebări • 90 secunde per întrebare
-                </p>
-              </div>
-
-              <div className="flex flex-wrap gap-3">
-                <Link
-                  href="/test"
-                  className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
-                >
-                  Previzualizează
-                </Link>
-
-                <button
-                  type="button"
-                  className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
-                >
-                  Editează
-                </button>
-              </div>
+              <Link
+                href={section.href}
+                className="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-green-600 px-5 py-3 font-semibold text-white transition hover:bg-green-700 sm:w-auto"
+              >
+                {section.action}
+              </Link>
             </article>
-          </div>
+          ))}
         </section>
 
-        <div className="mt-8 rounded-2xl border border-dashed border-gray-300 bg-white px-6 py-10 text-center">
-          <h2 className="text-lg font-bold text-gray-900">
-            Următorul pas
+        <section className="mt-8 rounded-2xl border border-green-200 bg-green-50 p-6">
+          <h2 className="text-lg font-bold text-green-900">
+            Acces rapid
           </h2>
 
-          <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-gray-600">
-            Vom conecta butonul „Creează test” la un formular în care vei
-            putea introduce întrebările sau încărca un fișier Excel.
-          </p>
-        </div>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <Link
+              href="/test"
+              className="rounded-xl border border-green-300 bg-white px-4 py-2.5 text-sm font-semibold text-green-800 transition hover:bg-green-100"
+            >
+              Vezi testul activ
+            </Link>
+
+            <Link
+              href="/clasament"
+              className="rounded-xl border border-green-300 bg-white px-4 py-2.5 text-sm font-semibold text-green-800 transition hover:bg-green-100"
+            >
+              Vezi clasamentul
+            </Link>
+
+            <Link
+              href="/legile-jocului"
+              className="rounded-xl border border-green-300 bg-white px-4 py-2.5 text-sm font-semibold text-green-800 transition hover:bg-green-100"
+            >
+              Legile Jocului
+            </Link>
+          </div>
+        </section>
       </div>
     </main>
   );
