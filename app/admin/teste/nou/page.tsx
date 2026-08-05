@@ -375,82 +375,70 @@ export default function NewTestPage() {
     setIsPublishing(true);
 
     try {
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+
+      if (
+        sessionError ||
+        !session?.access_token
+      ) {
+        throw new Error(
+          "Trebuie să fii autentificat ca administrator."
+        );
+      }
+
       const preparedTest = buildTest();
 
-      const newTestId = crypto.randomUUID();
-
-      const { error: testError } =
-        await supabase
-          .from("tests")
-          .insert({
-            id: newTestId,
+      const response = await fetch(
+        "/api/admin/teste/creeaza",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
             title: preparedTest.title,
-            time_per_question:
+            timePerQuestion:
               preparedTest.timePerQuestion,
-            is_active: false,
-          });
+            questions:
+              preparedTest.questions.map(
+                (question) => ({
+                  question: question.question,
+                  answers: question.answers,
+                  correctAnswer:
+                    question.correctAnswer,
+                  explanation:
+                    question.explanation,
+                  law: question.law,
+                })
+              ),
+          }),
+        }
+      );
 
-      if (testError) {
-        throw new Error(testError.message);
-      }
+      const result = (await response.json()) as {
+        success?: boolean;
+        testId?: string;
+        message?: string;
+        error?: string;
+      };
 
-      const questionRows =
-        preparedTest.questions.map(
-          (question, questionIndex) => ({
-            test_id: newTestId,
-            order_number: questionIndex + 1,
-            question: question.question,
-            answer_a: question.answers[0],
-            answer_b: question.answers[1],
-            answer_c: question.answers[2],
-            answer_d: question.answers[3],
-            correct_answer:
-              question.correctAnswer,
-            explanation:
-              question.explanation || null,
-            law: question.law ?? null,
-          })
+      if (!response.ok || result.error) {
+        throw new Error(
+          result.error ||
+            "Testul nu a putut fi publicat."
         );
-
-      const { error: questionsError } =
-        await supabase
-          .from("questions")
-          .insert(questionRows);
-
-      if (questionsError) {
-        throw new Error(questionsError.message);
-      }
-
-      const { error: deactivateError } =
-        await supabase
-          .from("tests")
-          .update({ is_active: false })
-          .neq("id", newTestId);
-
-      if (deactivateError) {
-        throw new Error(deactivateError.message);
-      }
-
-      const { error: activateError } =
-        await supabase
-          .from("tests")
-          .update({ is_active: true })
-          .eq("id", newTestId);
-
-      if (activateError) {
-        throw new Error(activateError.message);
       }
 
       localStorage.removeItem("activeTest");
       localStorage.removeItem("savedTest");
 
-      console.log(
-        "Test publicat în Supabase:",
-        newTestId
-      );
-
       setSaveMessage(
-        "Testul a fost publicat în Supabase și este acum activ."
+        result.message ||
+          "Testul a fost publicat și este acum activ."
       );
     } catch (error) {
       console.error(
