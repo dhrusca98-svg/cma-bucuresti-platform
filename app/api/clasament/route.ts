@@ -105,12 +105,14 @@ export async function GET() {
             active
           )
         `),
+
       adminClient
         .from("tests")
         .select("id", {
           count: "exact",
           head: true,
         }),
+
       adminClient
         .from("participants")
         .select("id", {
@@ -139,7 +141,8 @@ export async function GET() {
     }
 
     const attempts =
-      (attemptsResult.data ?? []) as AttemptRow[];
+      (attemptsResult.data ??
+        []) as AttemptRow[];
 
     const rankingMap = new Map<
       string,
@@ -164,14 +167,20 @@ export async function GET() {
 
       totalGrades += grade;
 
-      const existing = rankingMap.get(
-        attempt.participant_id
-      );
+      const existing =
+        rankingMap.get(
+          attempt.participant_id
+        );
 
       if (existing) {
-        existing.totalPoints += grade;
-        existing.maximumPoints += 10;
+        existing.totalPoints +=
+          attempt.score;
+
+        existing.maximumPoints +=
+          attempt.total_questions;
+
         existing.testsTaken += 1;
+
         existing.gradeSum += grade;
 
         if (
@@ -194,14 +203,23 @@ export async function GET() {
         {
           participantId:
             attempt.participant_id,
+
           firstName:
             participant.first_name,
+
           lastName:
             participant.last_name,
-          totalPoints: grade,
-          maximumPoints: 10,
+
+          totalPoints:
+            attempt.score,
+
+          maximumPoints:
+            attempt.total_questions,
+
           testsTaken: 1,
+
           gradeSum: grade,
+
           latestAttemptAt:
             attempt.created_at,
         }
@@ -214,31 +232,41 @@ export async function GET() {
       .map((participant) => ({
         participantId:
           participant.participantId,
+
         firstName:
           participant.firstName,
+
         lastName:
           participant.lastName,
+
         fullName:
           `${participant.lastName} ${participant.firstName}`.trim(),
+
         totalPoints:
           participant.totalPoints,
+
         maximumPoints:
           participant.maximumPoints,
+
         testsTaken:
           participant.testsTaken,
+
         publishedTests:
           testsResult.count ?? 0,
+
         participationPercentage:
           (testsResult.count ?? 0) > 0
             ? (participant.testsTaken /
                 (testsResult.count ?? 1)) *
               100
             : 0,
+
         averageGrade:
           participant.testsTaken > 0
             ? participant.gradeSum /
               participant.testsTaken
             : 0,
+
         latestAttemptAt:
           participant.latestAttemptAt,
       }))
@@ -285,7 +313,8 @@ export async function GET() {
 
     const generalAverageGrade =
       attempts.length > 0
-        ? totalGrades / attempts.length
+        ? totalGrades /
+          attempts.length
         : 0;
 
     return Response.json({
@@ -293,12 +322,16 @@ export async function GET() {
       stats: {
         publishedTests:
           testsResult.count ?? 0,
+
         activeParticipants:
           participantsResult.count ?? 0,
+
         participantsWithResults:
           ranking.length,
+
         totalAttempts:
           attempts.length,
+
         generalAverageGrade,
       },
     });

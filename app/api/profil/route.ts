@@ -99,15 +99,20 @@ function calculateGrade(
 
 export async function GET(request: Request) {
   try {
-    const { authClient, adminClient } =
-      createClients();
+    const {
+      authClient,
+      adminClient,
+    } = createClients();
 
     const authorization =
-      request.headers.get("authorization") ??
-      "";
+      request.headers.get(
+        "authorization"
+      ) ?? "";
 
     const accessToken =
-      authorization.startsWith("Bearer ")
+      authorization.startsWith(
+        "Bearer "
+      )
         ? authorization.slice(7)
         : "";
 
@@ -124,9 +129,10 @@ export async function GET(request: Request) {
     const {
       data: { user },
       error: userError,
-    } = await authClient.auth.getUser(
-      accessToken
-    );
+    } =
+      await authClient.auth.getUser(
+        accessToken
+      );
 
     if (userError || !user) {
       return Response.json(
@@ -150,7 +156,10 @@ export async function GET(request: Request) {
         email,
         active
       `)
-      .eq("auth_user_id", user.id)
+      .eq(
+        "auth_user_id",
+        user.id
+      )
       .maybeSingle();
 
     if (participantError) {
@@ -169,7 +178,9 @@ export async function GET(request: Request) {
       );
     }
 
-    if (participant.active !== true) {
+    if (
+      participant.active !== true
+    ) {
       return Response.json(
         {
           error:
@@ -201,9 +212,13 @@ export async function GET(request: Request) {
           "participant_id",
           participant.id
         )
-        .order("created_at", {
-          ascending: false,
-        }),
+        .order(
+          "created_at",
+          {
+            ascending: false,
+          }
+        ),
+
       adminClient
         .from("tests")
         .select("id", {
@@ -212,7 +227,9 @@ export async function GET(request: Request) {
         }),
     ]);
 
-    if (attemptsResult.error) {
+    if (
+      attemptsResult.error
+    ) {
       throw new Error(
         attemptsResult.error.message
       );
@@ -228,25 +245,37 @@ export async function GET(request: Request) {
       (attemptsResult.data ??
         []) as AttemptRow[];
 
-    const grades = attempts.map(
-      (attempt) =>
-        calculateGrade(
-          attempt.score,
-          attempt.total_questions
-        )
-    );
+    const grades =
+      attempts.map(
+        (attempt) =>
+          calculateGrade(
+            attempt.score,
+            attempt.total_questions
+          )
+      );
 
-    const totalPoints = grades.reduce(
-      (sum, grade) => sum + grade,
-      0
-    );
+    const totalPoints =
+      attempts.reduce(
+        (sum, attempt) =>
+          sum + attempt.score,
+        0
+      );
 
     const maximumPoints =
-      attempts.length * 10;
+      attempts.reduce(
+        (sum, attempt) =>
+          sum +
+          attempt.total_questions,
+        0
+      );
 
     const averageGrade =
       grades.length > 0
-        ? totalPoints / grades.length
+        ? grades.reduce(
+            (sum, grade) =>
+              sum + grade,
+            0
+          ) / grades.length
         : 0;
 
     const publishedTests =
@@ -259,60 +288,81 @@ export async function GET(request: Request) {
           100
         : 0;
 
-    const history = attempts.map(
-      (attempt) => {
-        const test = getTest(
-          attempt.tests
-        );
+    const history =
+      attempts.map(
+        (attempt) => {
+          const test =
+            getTest(
+              attempt.tests
+            );
 
-        return {
-          attemptId:
-            attempt.id,
-          testId:
-            test?.id ?? "",
-          title:
-            test?.title ??
-            "Test fără titlu",
-          score:
-            attempt.score,
-          totalQuestions:
-            attempt.total_questions,
-          grade:
-            calculateGrade(
+          return {
+            attemptId:
+              attempt.id,
+
+            testId:
+              test?.id ?? "",
+
+            title:
+              test?.title ??
+              "Test fără titlu",
+
+            score:
               attempt.score,
-              attempt.total_questions
-            ),
-          durationSeconds:
-            attempt.duration_seconds,
-          completedAt:
-            attempt.created_at,
-        };
-      }
-    );
+
+            totalQuestions:
+              attempt.total_questions,
+
+            grade:
+              calculateGrade(
+                attempt.score,
+                attempt.total_questions
+              ),
+
+            durationSeconds:
+              attempt.duration_seconds,
+
+            completedAt:
+              attempt.created_at,
+          };
+        }
+      );
 
     return Response.json({
       participant: {
-        id: participant.id,
+        id:
+          participant.id,
+
         firstName:
           participant.first_name,
+
         lastName:
           participant.last_name,
+
         fullName:
           `${participant.last_name} ${participant.first_name}`.trim(),
+
         email:
           participant.email ??
           user.email ??
           "",
       },
+
       stats: {
         testsTaken:
           attempts.length,
+
         publishedTests,
+
         totalPoints,
+
         maximumPoints,
+
         averageGrade,
+
         participationPercentage,
       },
+
       history,
     });
   } catch (error) {
