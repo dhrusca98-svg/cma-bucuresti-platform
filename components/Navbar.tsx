@@ -4,14 +4,46 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 
+import { supabase } from "@/lib/supabase/client";
+
 export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] =
+    useState(false);
+
+  const [authLoading, setAuthLoading] =
+    useState(true);
 
   function closeMenu() {
     setMenuOpen(false);
   }
 
-  // Blochează scroll-ul paginii când meniul mobil este deschis
+  useEffect(() => {
+    async function checkSession() {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      setIsAuthenticated(Boolean(session));
+      setAuthLoading(false);
+    }
+
+    checkSession();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setIsAuthenticated(Boolean(session));
+        setAuthLoading(false);
+      }
+    );
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
   useEffect(() => {
     if (menuOpen) {
       document.body.style.overflow = "hidden";
@@ -24,12 +56,21 @@ export default function Navbar() {
     };
   }, [menuOpen]);
 
+  async function handleLogout() {
+    await supabase.auth.signOut();
+
+    setIsAuthenticated(false);
+    closeMenu();
+
+    window.location.href = "/";
+  }
+
   return (
     <>
       {/* HEADER */}
       <header className="relative z-40 border-b border-gray-200 bg-white">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
-          
+
           {/* MOBILE - Hamburger stânga */}
           <button
             type="button"
@@ -98,6 +139,24 @@ export default function Navbar() {
             >
               Clasament
             </Link>
+
+            {!authLoading &&
+              (isAuthenticated ? (
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="rounded-lg border border-gray-300 px-4 py-2 font-semibold text-gray-700 transition hover:border-red-300 hover:bg-red-50 hover:text-red-700"
+                >
+                  Deconectare
+                </button>
+              ) : (
+                <Link
+                  href="/login"
+                  className="rounded-lg bg-green-600 px-4 py-2 font-semibold text-white transition hover:bg-green-700"
+                >
+                  Login
+                </Link>
+              ))}
           </nav>
 
           {/* MOBILE - Logo dreapta */}
@@ -117,7 +176,7 @@ export default function Navbar() {
         </div>
       </header>
 
-      {/* FUNDAL ÎNTUNECAT PE MOBILE */}
+      {/* FUNDAL ÎNTUNECAT MOBILE */}
       <div
         onClick={closeMenu}
         className={`fixed inset-0 z-40 bg-black/50 transition-opacity duration-300 md:hidden ${
@@ -135,7 +194,7 @@ export default function Navbar() {
             : "-translate-x-full"
         }`}
       >
-        {/* Partea de sus a meniului */}
+        {/* HEADER DRAWER */}
         <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
           <Link
             href="/"
@@ -151,7 +210,6 @@ export default function Navbar() {
             />
           </Link>
 
-          {/* X */}
           <button
             type="button"
             onClick={closeMenu}
@@ -175,7 +233,7 @@ export default function Navbar() {
           </button>
         </div>
 
-        {/* Link-uri */}
+        {/* LINK-URI MOBILE */}
         <nav className="px-3 py-4">
           <MobileLink
             href="/"
@@ -200,9 +258,31 @@ export default function Navbar() {
             label="Clasament"
             onClick={closeMenu}
           />
+
+          {!authLoading && (
+            <div className="mt-4 border-t border-gray-200 pt-4">
+              {isAuthenticated ? (
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="block w-full rounded-xl border border-red-200 bg-red-50 px-4 py-4 text-center text-base font-semibold text-red-700 transition hover:bg-red-100"
+                >
+                  Deconectare
+                </button>
+              ) : (
+                <Link
+                  href="/login"
+                  onClick={closeMenu}
+                  className="block w-full rounded-xl bg-green-600 px-4 py-4 text-center text-base font-semibold text-white transition hover:bg-green-700"
+                >
+                  Login
+                </Link>
+              )}
+            </div>
+          )}
         </nav>
 
-        {/* Footer meniu */}
+        {/* FOOTER DRAWER */}
         <div className="absolute bottom-0 left-0 right-0 border-t border-gray-200 px-5 py-4">
           <p className="text-xs leading-5 text-gray-400">
             Comisia Municipală a Arbitrilor București
