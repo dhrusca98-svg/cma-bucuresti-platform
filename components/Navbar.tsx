@@ -67,7 +67,6 @@ export default function Navbar() {
 
   return (
     <>
-      {/* HEADER */}
       <header className="relative z-40 border-b border-gray-200 bg-white">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
 
@@ -110,7 +109,7 @@ export default function Navbar() {
             />
           </Link>
 
-          {/* DESKTOP - Meniu dreapta */}
+          {/* DESKTOP - Meniu */}
           <nav className="hidden items-center gap-6 text-sm font-medium text-gray-700 md:flex">
             <Link
               href="/"
@@ -142,13 +141,22 @@ export default function Navbar() {
 
             {!authLoading &&
               (isAuthenticated ? (
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  className="rounded-lg border border-gray-300 px-4 py-2 font-semibold text-gray-700 transition hover:border-red-300 hover:bg-red-50 hover:text-red-700"
-                >
-                  Deconectare
-                </button>
+                <>
+                  <Link
+                    href="/profil"
+                    className="rounded-lg bg-green-600 px-4 py-2 font-semibold text-white transition hover:bg-green-700"
+                  >
+                    Profilul meu
+                  </Link>
+
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="rounded-lg border border-gray-300 px-4 py-2 font-semibold text-gray-700 transition hover:border-red-300 hover:bg-red-50 hover:text-red-700"
+                  >
+                    Deconectare
+                  </button>
+                </>
               ) : (
                 <Link
                   href="/login"
@@ -176,7 +184,7 @@ export default function Navbar() {
         </div>
       </header>
 
-      {/* FUNDAL ÎNTUNECAT MOBILE */}
+      {/* Overlay mobile */}
       <div
         onClick={closeMenu}
         className={`fixed inset-0 z-40 bg-black/50 transition-opacity duration-300 md:hidden ${
@@ -186,7 +194,7 @@ export default function Navbar() {
         }`}
       />
 
-      {/* MENIU LATERAL MOBILE */}
+      {/* Drawer mobile */}
       <aside
         className={`fixed left-0 top-0 z-50 h-screen w-[82%] max-w-sm bg-white shadow-2xl transition-transform duration-300 ease-out md:hidden ${
           menuOpen
@@ -194,7 +202,6 @@ export default function Navbar() {
             : "-translate-x-full"
         }`}
       >
-        {/* HEADER DRAWER */}
         <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
           <Link
             href="/"
@@ -233,7 +240,6 @@ export default function Navbar() {
           </button>
         </div>
 
-        {/* LINK-URI MOBILE */}
         <nav className="px-3 py-4">
           <MobileLink
             href="/"
@@ -262,13 +268,23 @@ export default function Navbar() {
           {!authLoading && (
             <div className="mt-4 border-t border-gray-200 pt-4">
               {isAuthenticated ? (
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  className="block w-full rounded-xl border border-red-200 bg-red-50 px-4 py-4 text-center text-base font-semibold text-red-700 transition hover:bg-red-100"
-                >
-                  Deconectare
-                </button>
+                <div className="space-y-3">
+                  <Link
+                    href="/profil"
+                    onClick={closeMenu}
+                    className="block w-full rounded-xl bg-green-600 px-4 py-4 text-center text-base font-semibold text-white transition hover:bg-green-700"
+                  >
+                    Profilul meu
+                  </Link>
+
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="block w-full rounded-xl border border-red-200 bg-red-50 px-4 py-4 text-center text-base font-semibold text-red-700 transition hover:bg-red-100"
+                  >
+                    Deconectare
+                  </button>
+                </div>
               ) : (
                 <Link
                   href="/login"
@@ -282,7 +298,6 @@ export default function Navbar() {
           )}
         </nav>
 
-        {/* FOOTER DRAWER */}
         <div className="absolute bottom-0 left-0 right-0 border-t border-gray-200 px-5 py-4">
           <p className="text-xs leading-5 text-gray-400">
             Comisia Municipală a Arbitrilor București
