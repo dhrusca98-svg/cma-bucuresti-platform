@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import {
@@ -753,6 +754,13 @@ function GradeResultCard({
           </p>
         </div>
       </div>
+
+      <Link
+        href="/"
+        className="mt-7 inline-flex w-full items-center justify-center rounded-xl bg-green-600 px-6 py-4 font-semibold text-white transition hover:bg-green-700 focus:outline-none focus:ring-4 focus:ring-green-200"
+      >
+        Înapoi la pagina principală
+      </Link>
     </div>
   );
 }
