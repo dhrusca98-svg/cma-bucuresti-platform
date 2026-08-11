@@ -4,7 +4,6 @@ interface AttemptRow {
   participant_id: string;
   score: number;
   total_questions: number;
-  percentage: number | string | null;
   created_at: string;
   participants:
     | {
@@ -27,7 +26,7 @@ interface RankingAccumulator {
   totalPoints: number;
   maximumPoints: number;
   testsTaken: number;
-  percentageSum: number;
+  gradeSum: number;
   latestAttemptAt: string;
 }
 
@@ -35,7 +34,9 @@ function requireEnvironmentVariable(name: string) {
   const value = process.env[name];
 
   if (!value) {
-    throw new Error(`Lipsește variabila de mediu ${name}.`);
+    throw new Error(
+      `Lipsește variabila de mediu ${name}.`
+    );
   }
 
   return value;
@@ -51,15 +52,28 @@ function getParticipant(
   return value;
 }
 
+function calculateGrade(
+  score: number,
+  totalQuestions: number
+) {
+  if (totalQuestions <= 0) {
+    return 0;
+  }
+
+  return (score / totalQuestions) * 10;
+}
+
 export async function GET() {
   try {
-    const supabaseUrl = requireEnvironmentVariable(
-      "NEXT_PUBLIC_SUPABASE_URL"
-    );
+    const supabaseUrl =
+      requireEnvironmentVariable(
+        "NEXT_PUBLIC_SUPABASE_URL"
+      );
 
-    const secretKey = requireEnvironmentVariable(
-      "SUPABASE_SECRET_KEY"
-    );
+    const secretKey =
+      requireEnvironmentVariable(
+        "SUPABASE_SECRET_KEY"
+      );
 
     const adminClient = createClient(
       supabaseUrl,
@@ -84,7 +98,6 @@ export async function GET() {
           participant_id,
           score,
           total_questions,
-          percentage,
           created_at,
           participants (
             first_name,
@@ -108,11 +121,15 @@ export async function GET() {
     ]);
 
     if (attemptsResult.error) {
-      throw new Error(attemptsResult.error.message);
+      throw new Error(
+        attemptsResult.error.message
+      );
     }
 
     if (testsResult.error) {
-      throw new Error(testsResult.error.message);
+      throw new Error(
+        testsResult.error.message
+      );
     }
 
     if (participantsResult.error) {
@@ -129,8 +146,7 @@ export async function GET() {
       RankingAccumulator
     >();
 
-    let totalPointsAwarded = 0;
-    let totalPossiblePoints = 0;
+    let totalGrades = 0;
 
     for (const attempt of attempts) {
       const participant = getParticipant(
@@ -141,27 +157,27 @@ export async function GET() {
         continue;
       }
 
-      const percentage = Number(
-        attempt.percentage ?? 0
+      const grade = calculateGrade(
+        attempt.score,
+        attempt.total_questions
       );
+
+      totalGrades += grade;
 
       const existing = rankingMap.get(
         attempt.participant_id
       );
 
-      totalPointsAwarded += attempt.score;
-      totalPossiblePoints +=
-        attempt.total_questions;
-
       if (existing) {
-        existing.totalPoints += attempt.score;
-        existing.maximumPoints +=
-          attempt.total_questions;
+        existing.totalPoints += grade;
+        existing.maximumPoints += 10;
         existing.testsTaken += 1;
-        existing.percentageSum += percentage;
+        existing.gradeSum += grade;
 
         if (
-          new Date(attempt.created_at).getTime() >
+          new Date(
+            attempt.created_at
+          ).getTime() >
           new Date(
             existing.latestAttemptAt
           ).getTime()
@@ -173,41 +189,54 @@ export async function GET() {
         continue;
       }
 
-      rankingMap.set(attempt.participant_id, {
-        participantId: attempt.participant_id,
-        firstName: participant.first_name,
-        lastName: participant.last_name,
-        totalPoints: attempt.score,
-        maximumPoints: attempt.total_questions,
-        testsTaken: 1,
-        percentageSum: percentage,
-        latestAttemptAt: attempt.created_at,
-      });
+      rankingMap.set(
+        attempt.participant_id,
+        {
+          participantId:
+            attempt.participant_id,
+          firstName:
+            participant.first_name,
+          lastName:
+            participant.last_name,
+          totalPoints: grade,
+          maximumPoints: 10,
+          testsTaken: 1,
+          gradeSum: grade,
+          latestAttemptAt:
+            attempt.created_at,
+        }
+      );
     }
 
     const ranking = Array.from(
       rankingMap.values()
     )
       .map((participant) => ({
-        participantId: participant.participantId,
-        firstName: participant.firstName,
-        lastName: participant.lastName,
+        participantId:
+          participant.participantId,
+        firstName:
+          participant.firstName,
+        lastName:
+          participant.lastName,
         fullName:
           `${participant.lastName} ${participant.firstName}`.trim(),
-        totalPoints: participant.totalPoints,
+        totalPoints:
+          participant.totalPoints,
         maximumPoints:
           participant.maximumPoints,
-        testsTaken: participant.testsTaken,
-        publishedTests: testsResult.count ?? 0,
+        testsTaken:
+          participant.testsTaken,
+        publishedTests:
+          testsResult.count ?? 0,
         participationPercentage:
           (testsResult.count ?? 0) > 0
             ? (participant.testsTaken /
                 (testsResult.count ?? 1)) *
               100
             : 0,
-        averagePercentage:
+        averageGrade:
           participant.testsTaken > 0
-            ? participant.percentageSum /
+            ? participant.gradeSum /
               participant.testsTaken
             : 0,
         latestAttemptAt:
@@ -225,12 +254,12 @@ export async function GET() {
         }
 
         if (
-          second.averagePercentage !==
-          first.averagePercentage
+          second.averageGrade !==
+          first.averageGrade
         ) {
           return (
-            second.averagePercentage -
-            first.averagePercentage
+            second.averageGrade -
+            first.averageGrade
           );
         }
 
@@ -254,23 +283,23 @@ export async function GET() {
         ...participant,
       }));
 
-    const generalAverage =
-      totalPossiblePoints > 0
-        ? (totalPointsAwarded /
-            totalPossiblePoints) *
-          100
+    const generalAverageGrade =
+      attempts.length > 0
+        ? totalGrades / attempts.length
         : 0;
 
     return Response.json({
       ranking,
       stats: {
-        publishedTests: testsResult.count ?? 0,
+        publishedTests:
+          testsResult.count ?? 0,
         activeParticipants:
           participantsResult.count ?? 0,
         participantsWithResults:
           ranking.length,
-        totalAttempts: attempts.length,
-        generalAverage,
+        totalAttempts:
+          attempts.length,
+        generalAverageGrade,
       },
     });
   } catch (error) {

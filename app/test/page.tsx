@@ -11,7 +11,6 @@ import {
 
 import AnswerButton from "@/components/AnswerButton";
 import ExplanationCard from "@/components/ExplanationCard";
-import ResultCard from "@/components/ResultCard";
 import TestHeader from "@/components/TestHeader";
 import TimerBar from "@/components/TimerBar";
 import { supabase } from "@/lib/supabase/client";
@@ -499,11 +498,16 @@ export default function TestPage() {
 
             <div className="rounded-2xl bg-green-50 p-5">
               <p className="text-3xl font-bold text-green-700">
-                {Math.round(existingAttempt.percentage)}%
+                {formatGrade(
+                  calculateGrade(
+                    existingAttempt.score,
+                    existingAttempt.totalQuestions
+                  )
+                )}
               </p>
 
               <p className="mt-1 text-sm text-green-700">
-                Procent
+                Notă
               </p>
             </div>
           </div>
@@ -558,9 +562,11 @@ export default function TestPage() {
         <div className="absolute inset-0 bg-black/60" />
 
         <div className="relative z-10">
-          <ResultCard
+          <GradeResultCard
             score={score}
-            totalQuestions={activeTest.questions.length}
+            totalQuestions={
+              activeTest.questions.length
+            }
           />
 
           {isAdminPreview && (
@@ -680,5 +686,73 @@ export default function TestPage() {
         )}
       </div>
     </main>
+  );
+}
+
+
+function calculateGrade(
+  score: number,
+  totalQuestions: number
+) {
+  if (totalQuestions <= 0) {
+    return 0;
+  }
+
+  return (score / totalQuestions) * 10;
+}
+
+function formatGrade(value: number) {
+  return value.toLocaleString("ro-RO", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+interface GradeResultCardProps {
+  score: number;
+  totalQuestions: number;
+}
+
+function GradeResultCard({
+  score,
+  totalQuestions,
+}: GradeResultCardProps) {
+  const grade = calculateGrade(
+    score,
+    totalQuestions
+  );
+
+  return (
+    <div className="mx-auto w-full max-w-xl rounded-3xl border border-white/20 bg-white/95 p-8 text-center shadow-2xl backdrop-blur-sm">
+      <p className="text-sm font-semibold uppercase tracking-[0.16em] text-green-700">
+        Rezultat final
+      </p>
+
+      <h1 className="mt-3 text-3xl font-bold text-gray-900">
+        Test finalizat
+      </h1>
+
+      <div className="mt-7 grid grid-cols-2 gap-4">
+        <div className="rounded-2xl bg-gray-100 p-5">
+          <p className="text-3xl font-bold text-gray-900">
+            {score}/{totalQuestions}
+          </p>
+
+          <p className="mt-1 text-sm text-gray-500">
+            Răspunsuri corecte
+          </p>
+        </div>
+
+        <div className="rounded-2xl bg-green-50 p-5">
+          <p className="text-3xl font-bold text-green-700">
+            {formatGrade(grade)}
+          </p>
+
+          <p className="mt-1 text-sm text-green-700">
+            Notă
+          </p>
+        </div>
+      </div>
+    </div>
   );
 }

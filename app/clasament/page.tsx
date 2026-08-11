@@ -19,7 +19,7 @@ interface RankingEntry {
   testsTaken: number;
   publishedTests: number;
   participationPercentage: number;
-  averagePercentage: number;
+  averageGrade: number;
   latestAttemptAt: string;
 }
 
@@ -28,7 +28,7 @@ interface RankingStats {
   activeParticipants: number;
   participantsWithResults: number;
   totalAttempts: number;
-  generalAverage: number;
+  generalAverageGrade: number;
 }
 
 interface RankingResponse {
@@ -97,214 +97,224 @@ export default function RankingPage() {
       <div className="fixed inset-0 bg-gradient-to-r from-black/80 via-black/60 to-black/50" />
 
       <div className="relative z-10">
-      <Navbar />
+        <Navbar />
 
-      <main className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-green-400">
-              Competiția sezonului
-            </p>
+        <main className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h1 className="text-sm font-semibold uppercase tracking-[0.16em] text-green-400">
+                Clasament general
+              </h1>
 
-            <h1 className="mt-2 text-3xl font-bold text-white sm:text-4xl">
-              Clasament general
-            </h1>
+              <p className="mt-3 max-w-2xl text-gray-300">
+                Punctele obținute la toate testele
+                publicate se adună pe parcursul
+                sezonului.
+              </p>
+            </div>
 
-            <p className="mt-3 max-w-2xl text-gray-300">
-              Punctele obținute la toate testele
-              publicate se adună pe parcursul
-              sezonului.
-            </p>
+            <Link
+              href="/"
+              className="inline-flex items-center justify-center rounded-xl border border-white/20 bg-black/40 px-5 py-3 font-semibold text-white backdrop-blur-md transition hover:bg-white/10"
+            >
+              Înapoi la homepage
+            </Link>
           </div>
 
-          <Link
-            href="/"
-            className="inline-flex items-center justify-center rounded-xl border border-white/20 bg-black/40 px-5 py-3 font-semibold text-white backdrop-blur-md transition hover:bg-white/10"
-          >
-            Înapoi la homepage
-          </Link>
-        </div>
+          {isLoading ? (
+            <div className="mt-10 rounded-2xl border border-white/15 bg-white/95 p-10 text-center shadow-sm backdrop-blur-sm">
+              <p className="text-gray-600">
+                Se încarcă clasamentul...
+              </p>
+            </div>
+          ) : error ? (
+            <div className="mt-10 rounded-2xl border border-red-200 bg-red-50 p-8 text-center">
+              <h2 className="text-xl font-bold text-red-800">
+                Clasamentul nu este disponibil
+              </h2>
 
-        {isLoading ? (
-          <div className="mt-10 rounded-2xl border border-white/15 bg-white/95 backdrop-blur-sm p-10 text-center shadow-sm">
-            <p className="text-gray-600">
-              Se încarcă clasamentul...
-            </p>
-          </div>
-        ) : error ? (
-          <div className="mt-10 rounded-2xl border border-red-200 bg-red-50 p-8 text-center">
-            <h2 className="text-xl font-bold text-red-800">
-              Clasamentul nu este disponibil
-            </h2>
+              <p className="mt-2 text-red-700">
+                {error}
+              </p>
+            </div>
+          ) : data ? (
+            <>
+              <section className="mt-10 grid grid-cols-2 gap-4 lg:grid-cols-4">
+                <StatCard
+                  label="Teste publicate"
+                  value={data.stats.publishedTests}
+                />
 
-            <p className="mt-2 text-red-700">
-              {error}
-            </p>
-          </div>
-        ) : data ? (
-          <>
-            <section className="mt-10 grid grid-cols-2 gap-4 lg:grid-cols-4">
-              <StatCard
-                label="Teste publicate"
-                value={data.stats.publishedTests}
-              />
+                <StatCard
+                  label="Participanți activi"
+                  value={
+                    data.stats.activeParticipants
+                  }
+                />
 
-              <StatCard
-                label="Participanți activi"
-                value={
-                  data.stats.activeParticipants
-                }
-              />
+                <StatCard
+                  label="Au obținut puncte"
+                  value={
+                    data.stats
+                      .participantsWithResults
+                  }
+                />
 
-              <StatCard
-                label="Au obținut puncte"
-                value={
-                  data.stats
-                    .participantsWithResults
-                }
-              />
+                <StatCard
+                  label="Media generală"
+                  value={formatGrade(
+                    data.stats.generalAverageGrade
+                  )}
+                />
+              </section>
 
-              <StatCard
-                label="Media generală"
-                value={`${Math.round(
-                  data.stats.generalAverage
-                )}%`}
-              />
-            </section>
+              {data.ranking.length === 0 ? (
+                <div className="mt-8 rounded-2xl border border-dashed border-white/20 bg-white/95 p-10 text-center backdrop-blur-sm">
+                  <h2 className="text-xl font-bold text-gray-900">
+                    Nu există încă rezultate
+                  </h2>
 
-            {data.ranking.length === 0 ? (
-              <div className="mt-8 rounded-2xl border border-dashed border-white/20 bg-white/95 backdrop-blur-sm p-10 text-center">
-                <h2 className="text-xl font-bold text-gray-900">
-                  Nu există încă rezultate
-                </h2>
+                  <p className="mt-2 text-gray-600">
+                    Clasamentul va apărea după
+                    susținerea primelor teste.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <section className="mt-8 grid gap-4 md:grid-cols-3">
+                    {data.ranking
+                      .slice(0, 3)
+                      .map((entry) => (
+                        <PodiumCard
+                          key={entry.participantId}
+                          entry={entry}
+                        />
+                      ))}
+                  </section>
 
-                <p className="mt-2 text-gray-600">
-                  Clasamentul va apărea după
-                  susținerea primelor teste.
-                </p>
-              </div>
-            ) : (
-              <>
-                <section className="mt-8 grid gap-4 md:grid-cols-3">
-                  {data.ranking
-                    .slice(0, 3)
-                    .map((entry) => (
-                      <PodiumCard
-                        key={entry.participantId}
-                        entry={entry}
-                      />
-                    ))}
-                </section>
+                  <section className="mt-8 overflow-hidden rounded-2xl border border-white/15 bg-white/95 shadow-sm backdrop-blur-sm">
+                    <div className="border-b border-gray-200 px-5 py-5 sm:px-6">
+                      <h2 className="text-lg font-bold text-gray-900">
+                        Clasament complet
+                      </h2>
+                    </div>
 
-                <section className="mt-8 overflow-hidden rounded-2xl border border-white/15 bg-white/95 backdrop-blur-sm shadow-sm">
-                  <div className="border-b border-gray-200 px-5 py-5 sm:px-6">
-                    <h2 className="text-lg font-bold text-gray-900">
-                      Clasament complet
-                    </h2>
-                  </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[860px] text-left">
+                        <thead className="bg-gray-50 text-sm text-gray-500">
+                          <tr>
+                            <th className="px-5 py-4 font-semibold sm:px-6">
+                              Loc
+                            </th>
 
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[860px] text-left">
-                      <thead className="bg-gray-50 text-sm text-gray-500">
-                        <tr>
-                          <th className="px-5 py-4 font-semibold sm:px-6">
-                            Loc
-                          </th>
-                          <th className="px-5 py-4 font-semibold">
-                            Arbitru
-                          </th>
-                          <th className="px-5 py-4 text-center font-semibold">
-                            Puncte
-                          </th>
-                          <th className="px-5 py-4 text-center font-semibold">
-                            Maximum
-                          </th>
-                          <th className="px-5 py-4 text-center font-semibold">
-                            Teste
-                          </th>
-                          <th className="px-5 py-4 text-center font-semibold">
-                            Participare
-                          </th>
-                          <th className="px-5 py-4 text-center font-semibold">
-                            Medie
-                          </th>
-                        </tr>
-                      </thead>
+                            <th className="px-5 py-4 font-semibold">
+                              Arbitru
+                            </th>
 
-                      <tbody className="divide-y divide-gray-100">
-                        {data.ranking.map(
-                          (entry) => (
-                            <tr
-                              key={
-                                entry.participantId
-                              }
-                              className="transition hover:bg-gray-50"
-                            >
-                              <td className="px-5 py-4 sm:px-6">
-                                <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 font-bold text-gray-700">
-                                  {entry.rank}
-                                </span>
-                              </td>
+                            <th className="px-5 py-4 text-center font-semibold">
+                              Puncte
+                            </th>
 
-                              <td className="px-5 py-4">
-                                <Link
-                                  href={`/clasament/${entry.participantId}`}
-                                  className="font-semibold text-gray-900 transition hover:text-green-700 hover:underline"
-                                >
-                                  {entry.fullName}
-                                </Link>
-                              </td>
+                            <th className="px-5 py-4 text-center font-semibold">
+                              Maximum
+                            </th>
 
-                              <td className="px-5 py-4 text-center text-lg font-bold text-green-700">
-                                {entry.totalPoints}
-                              </td>
+                            <th className="px-5 py-4 text-center font-semibold">
+                              Teste
+                            </th>
 
-                              <td className="px-5 py-4 text-center text-gray-700">
-                                {
-                                  entry.maximumPoints
+                            <th className="px-5 py-4 text-center font-semibold">
+                              Participare
+                            </th>
+
+                            <th className="px-5 py-4 text-center font-semibold">
+                              Medie notă
+                            </th>
+                          </tr>
+                        </thead>
+
+                        <tbody className="divide-y divide-gray-100">
+                          {data.ranking.map(
+                            (entry) => (
+                              <tr
+                                key={
+                                  entry.participantId
                                 }
-                              </td>
+                                className="transition hover:bg-gray-50"
+                              >
+                                <td className="px-5 py-4 sm:px-6">
+                                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 font-bold text-gray-700">
+                                    {entry.rank}
+                                  </span>
+                                </td>
 
-                              <td className="px-5 py-4 text-center text-gray-700">
-                                {entry.testsTaken}
-                              </td>
+                                <td className="px-5 py-4">
+                                  <Link
+                                    href={`/clasament/${entry.participantId}`}
+                                    className="font-semibold text-gray-900 transition hover:text-green-700 hover:underline"
+                                  >
+                                    {entry.fullName}
+                                  </Link>
+                                </td>
 
-                              <td className="px-5 py-4 text-center text-gray-700">
-                                <span className="font-semibold text-gray-900">
-                                  {entry.testsTaken}/
-                                  {entry.publishedTests}
-                                </span>
+                                <td className="px-5 py-4 text-center text-lg font-bold text-green-700">
+                                  {entry.totalPoints}
+                                </td>
 
-                                <span className="ml-2 text-sm text-gray-500">
-                                  (
-                                  {Math.round(
-                                    entry.participationPercentage
+                                <td className="px-5 py-4 text-center text-gray-700">
+                                  {
+                                    entry.maximumPoints
+                                  }
+                                </td>
+
+                                <td className="px-5 py-4 text-center text-gray-700">
+                                  {entry.testsTaken}
+                                </td>
+
+                                <td className="px-5 py-4 text-center text-gray-700">
+                                  <span className="font-semibold text-gray-900">
+                                    {entry.testsTaken}/
+                                    {
+                                      entry.publishedTests
+                                    }
+                                  </span>
+
+                                  <span className="ml-2 text-sm text-gray-500">
+                                    (
+                                    {Math.round(
+                                      entry.participationPercentage
+                                    )}
+                                    %)
+                                  </span>
+                                </td>
+
+                                <td className="px-5 py-4 text-center font-semibold text-gray-900">
+                                  {formatGrade(
+                                    entry.averageGrade
                                   )}
-                                  %)
-                                </span>
-                              </td>
-
-                              <td className="px-5 py-4 text-center font-semibold text-gray-900">
-                                {Math.round(
-                                  entry.averagePercentage
-                                )}
-                                %
-                              </td>
-                            </tr>
-                          )
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </section>
-              </>
-            )}
-          </>
-        ) : null}
-      </main>
+                                </td>
+                              </tr>
+                            )
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
+                </>
+              )}
+            </>
+          ) : null}
+        </main>
       </div>
     </div>
   );
+}
+
+function formatGrade(value: number) {
+  return value.toLocaleString("ro-RO", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
 interface StatCardProps {
@@ -317,7 +327,7 @@ function StatCard({
   value,
 }: StatCardProps) {
   return (
-    <div className="rounded-2xl border border-white/15 bg-white/95 backdrop-blur-sm p-5 shadow-sm">
+    <div className="rounded-2xl border border-white/15 bg-white/95 p-5 shadow-sm backdrop-blur-sm">
       <p className="text-2xl font-bold text-gray-900 sm:text-3xl">
         {value}
       </p>
@@ -344,7 +354,7 @@ function PodiumCard({
         : "Locul 3";
 
   return (
-    <article className="rounded-2xl border border-white/15 bg-white/95 backdrop-blur-sm p-6 text-center shadow-sm">
+    <article className="rounded-2xl border border-white/15 bg-white/95 p-6 text-center shadow-sm backdrop-blur-sm">
       <p className="text-sm font-bold uppercase tracking-[0.14em] text-green-700">
         {positionLabel}
       </p>
@@ -380,10 +390,9 @@ function PodiumCard({
         </span>
 
         <span>
-          {Math.round(
-            entry.averagePercentage
+          media {formatGrade(
+            entry.averageGrade
           )}
-          % medie
         </span>
       </div>
     </article>

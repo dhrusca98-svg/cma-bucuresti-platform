@@ -19,15 +19,17 @@ interface DashboardResponse {
     createdAt: string;
     questionCount: number;
   } | null;
+
   stats: {
     activeParticipants: number;
     completed: number;
     missing: number;
     participationPercentage: number;
-    averagePercentage: number;
-    maximumScore: number | null;
-    minimumScore: number | null;
+    averageGrade: number;
+    maximumGrade: number | null;
+    minimumGrade: number | null;
   } | null;
+
   results: {
     rank: number;
     attemptId: string;
@@ -36,17 +38,19 @@ interface DashboardResponse {
     email: string;
     score: number;
     totalQuestions: number;
-    percentage: number;
+    grade: number;
     durationSeconds: number | null;
     completedAt: string;
   }[];
+
   missingParticipants: {
     participantId: string;
     fullName: string;
     email: string;
   }[];
-  scoreDistribution: {
-    score: number;
+
+  gradeDistribution: {
+    grade: number;
     count: number;
   }[];
 }
@@ -58,7 +62,8 @@ export default function AdminResultsPage() {
   const [isLoading, setIsLoading] =
     useState(true);
 
-  const [error, setError] = useState("");
+  const [error, setError] =
+    useState("");
 
   const [searchMissing, setSearchMissing] =
     useState("");
@@ -90,11 +95,15 @@ export default function AdminResultsPage() {
           }
         );
 
-        const result = (await response.json()) as
-          | DashboardResponse
-          | { error: string };
+        const result =
+          (await response.json()) as
+            | DashboardResponse
+            | { error: string };
 
-        if (!response.ok || "error" in result) {
+        if (
+          !response.ok ||
+          "error" in result
+        ) {
           throw new Error(
             "error" in result
               ? result.error
@@ -123,7 +132,9 @@ export default function AdminResultsPage() {
       .toLowerCase();
 
     if (!query || !data) {
-      return data?.missingParticipants ?? [];
+      return (
+        data?.missingParticipants ?? []
+      );
     }
 
     return data.missingParticipants.filter(
@@ -149,9 +160,9 @@ export default function AdminResultsPage() {
         Email: result.email,
         Scor: result.score,
         Total: result.totalQuestions,
-        Procent: `${Math.round(
-          result.percentage
-        )}%`,
+        Nota: formatGrade(
+          result.grade
+        ),
         Durata: formatDuration(
           result.durationSeconds
         ),
@@ -164,7 +175,8 @@ export default function AdminResultsPage() {
     const worksheet =
       XLSX.utils.json_to_sheet(rows);
 
-    const workbook = XLSX.utils.book_new();
+    const workbook =
+      XLSX.utils.book_new();
 
     XLSX.utils.book_append_sheet(
       workbook,
@@ -294,12 +306,16 @@ export default function AdminResultsPage() {
 
                 <StatCard
                   label="Au susținut"
-                  value={data.stats.completed}
+                  value={
+                    data.stats.completed
+                  }
                 />
 
                 <StatCard
                   label="Nu au susținut"
-                  value={data.stats.missing}
+                  value={
+                    data.stats.missing
+                  }
                 />
 
                 <StatCard
@@ -311,29 +327,35 @@ export default function AdminResultsPage() {
                 />
 
                 <StatCard
-                  label="Media"
-                  value={`${Math.round(
-                    data.stats.averagePercentage
-                  )}%`}
+                  label="Media notelor"
+                  value={formatGrade(
+                    data.stats.averageGrade
+                  )}
                 />
 
                 <StatCard
-                  label="Scor maxim"
+                  label="Nota maximă"
                   value={
-                    data.stats.maximumScore ===
-                    null
+                    data.stats
+                      .maximumGrade === null
                       ? "—"
-                      : `${data.stats.maximumScore}/${data.activeTest.questionCount}`
+                      : formatGrade(
+                          data.stats
+                            .maximumGrade
+                        )
                   }
                 />
 
                 <StatCard
-                  label="Scor minim"
+                  label="Nota minimă"
                   value={
-                    data.stats.minimumScore ===
-                    null
+                    data.stats
+                      .minimumGrade === null
                       ? "—"
-                      : `${data.stats.minimumScore}/${data.activeTest.questionCount}`
+                      : formatGrade(
+                          data.stats
+                            .minimumGrade
+                        )
                   }
                 />
               </section>
@@ -348,7 +370,8 @@ export default function AdminResultsPage() {
 
                       <p className="mt-1 text-sm text-gray-500">
                         {
-                          data.results.length
+                          data.results
+                            .length
                         }{" "}
                         rezultate salvate
                       </p>
@@ -360,7 +383,8 @@ export default function AdminResultsPage() {
                         handleExportResults
                       }
                       disabled={
-                        data.results.length === 0
+                        data.results
+                          .length === 0
                       }
                       className="rounded-xl bg-green-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-300"
                     >
@@ -368,7 +392,8 @@ export default function AdminResultsPage() {
                     </button>
                   </div>
 
-                  {data.results.length === 0 ? (
+                  {data.results.length ===
+                  0 ? (
                     <div className="p-10 text-center text-gray-600">
                       Nu există încă rezultate.
                     </div>
@@ -380,18 +405,23 @@ export default function AdminResultsPage() {
                             <th className="px-5 py-4 font-semibold sm:px-6">
                               Loc
                             </th>
+
                             <th className="px-5 py-4 font-semibold">
                               Arbitru
                             </th>
+
                             <th className="px-5 py-4 text-center font-semibold">
                               Scor
                             </th>
+
                             <th className="px-5 py-4 text-center font-semibold">
-                              Procent
+                              Notă
                             </th>
+
                             <th className="px-5 py-4 text-center font-semibold">
                               Durată
                             </th>
+
                             <th className="px-5 py-4 text-right font-semibold sm:px-6">
                               Data
                             </th>
@@ -443,10 +473,9 @@ export default function AdminResultsPage() {
                                 </td>
 
                                 <td className="px-5 py-4 text-center font-semibold text-green-700">
-                                  {Math.round(
-                                    result.percentage
+                                  {formatGrade(
+                                    result.grade
                                   )}
-                                  %
                                 </td>
 
                                 <td className="px-5 py-4 text-center text-gray-600">
@@ -479,7 +508,8 @@ export default function AdminResultsPage() {
 
                     <p className="mt-1 text-sm text-gray-500">
                       {
-                        data.missingParticipants
+                        data
+                          .missingParticipants
                           .length
                       }{" "}
                       participanți
@@ -502,8 +532,8 @@ export default function AdminResultsPage() {
                     {filteredMissing.length ===
                     0 ? (
                       <div className="p-8 text-center text-gray-600">
-                        Nu există rezultate pentru
-                        căutarea curentă.
+                        Nu există rezultate
+                        pentru căutarea curentă.
                       </div>
                     ) : (
                       <ul className="divide-y divide-gray-100">
@@ -538,23 +568,22 @@ export default function AdminResultsPage() {
               <section className="mt-8 overflow-hidden rounded-2xl border border-white/15 bg-white/95 shadow-sm backdrop-blur-sm">
                 <div className="border-b border-gray-200 px-5 py-5 sm:px-6">
                   <h2 className="text-xl font-bold text-gray-900">
-                    Distribuția scorurilor
+                    Distribuția notelor
                   </h2>
                 </div>
 
-                <div className="grid gap-3 p-5 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 sm:p-6">
-                  {data.scoreDistribution.map(
+                <div className="grid gap-3 p-5 sm:grid-cols-2 sm:p-6 lg:grid-cols-4 xl:grid-cols-6">
+                  {data.gradeDistribution.map(
                     (item) => (
                       <div
-                        key={item.score}
+                        key={item.grade}
                         className="rounded-xl border border-gray-200 bg-gray-50 p-4"
                       >
                         <p className="text-lg font-bold text-gray-900">
-                          {item.score}/
-                          {
-                            data.activeTest
-                              ?.questionCount
-                          }
+                          Nota{" "}
+                          {formatGrade(
+                            item.grade
+                          )}
                         </p>
 
                         <p className="mt-1 text-sm text-gray-500">
@@ -576,8 +605,8 @@ export default function AdminResultsPage() {
               </h2>
 
               <p className="mt-2 text-gray-600">
-                Publică un test pentru a vedea
-                rezultatele.
+                Publică un test pentru a
+                vedea rezultatele.
               </p>
             </div>
           )}
@@ -585,6 +614,13 @@ export default function AdminResultsPage() {
       </div>
     </div>
   );
+}
+
+function formatGrade(value: number) {
+  return value.toLocaleString("ro-RO", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
 interface StatCardProps {
@@ -623,7 +659,8 @@ function formatDuration(
     durationSeconds / 60
   );
 
-  const seconds = durationSeconds % 60;
+  const seconds =
+    durationSeconds % 60;
 
   return `${minutes}:${seconds
     .toString()

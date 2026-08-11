@@ -16,7 +16,7 @@ interface ProfileHistoryItem {
   title: string;
   score: number;
   totalQuestions: number;
-  percentage: number;
+  grade: number;
   durationSeconds: number | null;
   completedAt: string;
 }
@@ -34,7 +34,7 @@ interface ProfileResponse {
     publishedTests: number;
     totalPoints: number;
     maximumPoints: number;
-    averagePercentage: number;
+    averageGrade: number;
     participationPercentage: number;
   };
   history: ProfileHistoryItem[];
@@ -188,10 +188,10 @@ export default function ProfilePage() {
                 />
 
                 <StatCard
-                  label="Medie"
-                  value={`${Math.round(
-                    profile.stats.averagePercentage
-                  )}%`}
+                  label="Media notelor"
+                  value={formatGrade(
+                    profile.stats.averageGrade
+                  )}
                 />
 
                 <StatCard
@@ -241,7 +241,7 @@ export default function ProfilePage() {
                             </th>
 
                             <th className="px-5 py-4 text-center font-semibold">
-                              Procent
+                              Notă
                             </th>
 
                             <th className="px-5 py-4 text-center font-semibold">
@@ -271,10 +271,9 @@ export default function ProfilePage() {
                                 </td>
 
                                 <td className="px-5 py-4 text-center font-semibold text-gray-900">
-                                  {Math.round(
-                                    item.percentage
+                                  {formatGrade(
+                                    item.grade
                                   )}
-                                  %
                                 </td>
 
                                 <td className="px-5 py-4 text-center text-gray-700">
@@ -314,10 +313,10 @@ export default function ProfilePage() {
                               />
 
                               <MiniStat
-                                label="Procent"
-                                value={`${Math.round(
-                                  item.percentage
-                                )}%`}
+                                label="Notă"
+                                value={formatGrade(
+                                  item.grade
+                                )}
                               />
 
                               <MiniStat
@@ -391,6 +390,13 @@ function MiniStat({
       </p>
     </div>
   );
+}
+
+function formatGrade(value: number) {
+  return value.toLocaleString("ro-RO", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
 function formatDuration(

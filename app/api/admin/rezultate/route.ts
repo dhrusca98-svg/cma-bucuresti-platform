@@ -5,7 +5,6 @@ interface AttemptRow {
   participant_id: string;
   score: number;
   total_questions: number;
-  percentage: number | string | null;
   duration_seconds: number | null;
   created_at: string;
   participants:
@@ -26,13 +25,17 @@ function requireEnvironmentVariable(name: string) {
   const value = process.env[name];
 
   if (!value) {
-    throw new Error(`Lipsește variabila de mediu ${name}.`);
+    throw new Error(
+      `Lipsește variabila de mediu ${name}.`
+    );
   }
 
   return value;
 }
 
-function firstRelated<T>(value: T | T[] | null) {
+function firstRelated<T>(
+  value: T | T[] | null
+) {
   if (Array.isArray(value)) {
     return value[0] ?? null;
   }
@@ -40,36 +43,56 @@ function firstRelated<T>(value: T | T[] | null) {
   return value;
 }
 
+function calculateGrade(
+  score: number,
+  totalQuestions: number
+) {
+  if (totalQuestions <= 0) {
+    return 0;
+  }
+
+  return (score / totalQuestions) * 10;
+}
+
 export async function GET(request: Request) {
   try {
-    const supabaseUrl = requireEnvironmentVariable(
-      "NEXT_PUBLIC_SUPABASE_URL"
-    );
+    const supabaseUrl =
+      requireEnvironmentVariable(
+        "NEXT_PUBLIC_SUPABASE_URL"
+      );
 
-    const publishableKey = requireEnvironmentVariable(
-      "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"
-    );
+    const publishableKey =
+      requireEnvironmentVariable(
+        "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"
+      );
 
-    const secretKey = requireEnvironmentVariable(
-      "SUPABASE_SECRET_KEY"
-    );
+    const secretKey =
+      requireEnvironmentVariable(
+        "SUPABASE_SECRET_KEY"
+      );
 
-    const adminEmail = requireEnvironmentVariable(
-      "ADMIN_EMAIL"
-    )
-      .trim()
-      .toLowerCase();
+    const adminEmail =
+      requireEnvironmentVariable(
+        "ADMIN_EMAIL"
+      )
+        .trim()
+        .toLowerCase();
 
     const authorization =
-      request.headers.get("authorization") ?? "";
+      request.headers.get("authorization") ??
+      "";
 
-    const accessToken = authorization.startsWith("Bearer ")
-      ? authorization.slice(7)
-      : "";
+    const accessToken =
+      authorization.startsWith("Bearer ")
+        ? authorization.slice(7)
+        : "";
 
     if (!accessToken) {
       return Response.json(
-        { error: "Trebuie să fii autentificat." },
+        {
+          error:
+            "Trebuie să fii autentificat.",
+        },
         { status: 401 }
       );
     }
@@ -89,16 +112,24 @@ export async function GET(request: Request) {
     const {
       data: { user },
       error: userError,
-    } = await authClient.auth.getUser(accessToken);
+    } = await authClient.auth.getUser(
+      accessToken
+    );
 
     if (userError || !user) {
       return Response.json(
-        { error: "Sesiunea nu este validă." },
+        {
+          error:
+            "Sesiunea nu este validă.",
+        },
         { status: 401 }
       );
     }
 
-    if (user.email?.toLowerCase() !== adminEmail) {
+    if (
+      user.email?.toLowerCase() !==
+      adminEmail
+    ) {
       return Response.json(
         {
           error:
@@ -136,7 +167,9 @@ export async function GET(request: Request) {
       .maybeSingle();
 
     if (activeTestError) {
-      throw new Error(activeTestError.message);
+      throw new Error(
+        activeTestError.message
+      );
     }
 
     if (!activeTest) {
@@ -145,7 +178,7 @@ export async function GET(request: Request) {
         stats: null,
         results: [],
         missingParticipants: [],
-        scoreDistribution: [],
+        gradeDistribution: [],
       });
     }
 
@@ -173,7 +206,6 @@ export async function GET(request: Request) {
           participant_id,
           score,
           total_questions,
-          percentage,
           duration_seconds,
           created_at,
           participants (
@@ -182,11 +214,11 @@ export async function GET(request: Request) {
             email
           )
         `)
-        .eq("test_id", activeTest.id)
+        .eq(
+          "test_id",
+          activeTest.id
+        )
         .order("score", {
-          ascending: false,
-        })
-        .order("percentage", {
           ascending: false,
         })
         .order("created_at", {
@@ -198,10 +230,15 @@ export async function GET(request: Request) {
           count: "exact",
           head: true,
         })
-        .eq("test_id", activeTest.id),
+        .eq(
+          "test_id",
+          activeTest.id
+        ),
     ]);
 
-    if (participantsResult.error) {
+    if (
+      participantsResult.error
+    ) {
       throw new Error(
         participantsResult.error.message
       );
@@ -223,32 +260,40 @@ export async function GET(request: Request) {
       participantsResult.data ?? [];
 
     const attempts =
-      (attemptsResult.data ?? []) as AttemptRow[];
+      (attemptsResult.data ??
+        []) as AttemptRow[];
 
     const results = attempts.map(
       (attempt, index) => {
-        const participant = firstRelated(
-          attempt.participants
-        );
+        const participant =
+          firstRelated(
+            attempt.participants
+          );
 
         return {
           rank: index + 1,
-          attemptId: attempt.id,
+          attemptId:
+            attempt.id,
           participantId:
             attempt.participant_id,
           fullName: participant
             ? `${participant.last_name} ${participant.first_name}`.trim()
             : "Participant necunoscut",
-          email: participant?.email ?? "",
-          score: attempt.score,
+          email:
+            participant?.email ?? "",
+          score:
+            attempt.score,
           totalQuestions:
             attempt.total_questions,
-          percentage: Number(
-            attempt.percentage ?? 0
-          ),
+          grade:
+            calculateGrade(
+              attempt.score,
+              attempt.total_questions
+            ),
           durationSeconds:
             attempt.duration_seconds,
-          completedAt: attempt.created_at,
+          completedAt:
+            attempt.created_at,
         };
       }
     );
@@ -256,7 +301,8 @@ export async function GET(request: Request) {
     const participantIdsWithAttempt =
       new Set(
         attempts.map(
-          (attempt) => attempt.participant_id
+          (attempt) =>
+            attempt.participant_id
         )
       );
 
@@ -268,88 +314,124 @@ export async function GET(request: Request) {
               participant.id
             )
         )
-        .map((participant) => ({
-          participantId: participant.id,
-          fullName:
-            `${participant.last_name} ${participant.first_name}`.trim(),
-          email: participant.email ?? "",
-        }));
+        .map(
+          (participant) => ({
+            participantId:
+              participant.id,
+            fullName:
+              `${participant.last_name} ${participant.first_name}`.trim(),
+            email:
+              participant.email ?? "",
+          })
+        );
 
-    const scores = attempts.map(
-      (attempt) => attempt.score
+    const grades = attempts.map(
+      (attempt) =>
+        calculateGrade(
+          attempt.score,
+          attempt.total_questions
+        )
     );
 
-    const totalPercentages = attempts.reduce(
-      (sum, attempt) =>
-        sum + Number(attempt.percentage ?? 0),
-      0
-    );
+    const averageGrade =
+      grades.length > 0
+        ? grades.reduce(
+            (sum, grade) =>
+              sum + grade,
+            0
+          ) / grades.length
+        : 0;
 
-    const maximumScore =
-      scores.length > 0 ? Math.max(...scores) : null;
+    const maximumGrade =
+      grades.length > 0
+        ? Math.max(...grades)
+        : null;
 
-    const minimumScore =
-      scores.length > 0 ? Math.min(...scores) : null;
+    const minimumGrade =
+      grades.length > 0
+        ? Math.min(...grades)
+        : null;
 
-    const distributionMap = new Map<
-      number,
-      number
-    >();
+    const distributionMap =
+      new Map<number, number>();
 
-    for (const score of scores) {
+    for (const grade of grades) {
       distributionMap.set(
-        score,
-        (distributionMap.get(score) ?? 0) + 1
+        grade,
+        (distributionMap.get(
+          grade
+        ) ?? 0) + 1
       );
     }
 
     const questionCount =
       questionsResult.count ?? 0;
 
-    const scoreDistribution = Array.from(
-      { length: questionCount + 1 },
-      (_, index) => questionCount - index
-    ).map((score) => ({
-      score,
-      count: distributionMap.get(score) ?? 0,
-    }));
+    const possibleGrades =
+      Array.from(
+        {
+          length:
+            questionCount + 1,
+        },
+        (_, score) =>
+          calculateGrade(
+            questionCount - score,
+            questionCount
+          )
+      );
 
-    const completedCount = attempts.length;
+    const gradeDistribution =
+      possibleGrades.map(
+        (grade) => ({
+          grade,
+          count:
+            distributionMap.get(
+              grade
+            ) ?? 0,
+        })
+      );
+
+    const completedCount =
+      attempts.length;
+
     const activeCount =
       activeParticipants.length;
 
     return Response.json({
       activeTest: {
         id: activeTest.id,
-        title: activeTest.title,
+        title:
+          activeTest.title,
         timePerQuestion:
           activeTest.time_per_question,
-        createdAt: activeTest.created_at,
+        createdAt:
+          activeTest.created_at,
         questionCount,
       },
       stats: {
-        activeParticipants: activeCount,
-        completed: completedCount,
-        missing: Math.max(
-          activeCount - completedCount,
-          0
-        ),
+        activeParticipants:
+          activeCount,
+        completed:
+          completedCount,
+        missing:
+          Math.max(
+            activeCount -
+              completedCount,
+            0
+          ),
         participationPercentage:
           activeCount > 0
-            ? (completedCount / activeCount) *
+            ? (completedCount /
+                activeCount) *
               100
             : 0,
-        averagePercentage:
-          completedCount > 0
-            ? totalPercentages /
-              completedCount
-            : 0,
-        maximumScore,
-        minimumScore,
+        averageGrade,
+        maximumGrade,
+        minimumGrade,
       },
       results,
       missingParticipants,
-      scoreDistribution,
+      gradeDistribution,
     });
   } catch (error) {
     console.error(

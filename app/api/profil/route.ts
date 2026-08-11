@@ -10,7 +10,6 @@ interface AttemptRow {
   id: string;
   score: number;
   total_questions: number;
-  percentage: number | string | null;
   duration_seconds: number | null;
   created_at: string;
   tests:
@@ -87,13 +86,25 @@ function getTest(
   return value;
 }
 
+function calculateGrade(
+  score: number,
+  totalQuestions: number
+) {
+  if (totalQuestions <= 0) {
+    return 0;
+  }
+
+  return (score / totalQuestions) * 10;
+}
+
 export async function GET(request: Request) {
   try {
     const { authClient, adminClient } =
       createClients();
 
     const authorization =
-      request.headers.get("authorization") ?? "";
+      request.headers.get("authorization") ??
+      "";
 
     const accessToken =
       authorization.startsWith("Bearer ")
@@ -132,15 +143,13 @@ export async function GET(request: Request) {
       error: participantError,
     } = await adminClient
       .from("participants")
-      .select(
-        `
-          id,
-          first_name,
-          last_name,
-          email,
-          active
-        `
-      )
+      .select(`
+        id,
+        first_name,
+        last_name,
+        email,
+        active
+      `)
       .eq("auth_user_id", user.id)
       .maybeSingle();
 
@@ -176,21 +185,18 @@ export async function GET(request: Request) {
     ] = await Promise.all([
       adminClient
         .from("attempts")
-        .select(
-          `
+        .select(`
+          id,
+          score,
+          total_questions,
+          duration_seconds,
+          created_at,
+          tests (
             id,
-            score,
-            total_questions,
-            percentage,
-            duration_seconds,
-            created_at,
-            tests (
-              id,
-              title,
-              created_at
-            )
-          `
-        )
+            title,
+            created_at
+          )
+        `)
         .eq(
           "participant_id",
           participant.id
@@ -219,31 +225,28 @@ export async function GET(request: Request) {
     }
 
     const attempts =
-      (attemptsResult.data ?? []) as AttemptRow[];
+      (attemptsResult.data ??
+        []) as AttemptRow[];
 
-    const totalPoints = attempts.reduce(
-      (sum, attempt) =>
-        sum + attempt.score,
+    const grades = attempts.map(
+      (attempt) =>
+        calculateGrade(
+          attempt.score,
+          attempt.total_questions
+        )
+    );
+
+    const totalPoints = grades.reduce(
+      (sum, grade) => sum + grade,
       0
     );
 
     const maximumPoints =
-      attempts.reduce(
-        (sum, attempt) =>
-          sum + attempt.total_questions,
-        0
-      );
+      attempts.length * 10;
 
-    const averagePercentage =
-      attempts.length > 0
-        ? attempts.reduce(
-            (sum, attempt) =>
-              sum +
-              Number(
-                attempt.percentage ?? 0
-              ),
-            0
-          ) / attempts.length
+    const averageGrade =
+      grades.length > 0
+        ? totalPoints / grades.length
         : 0;
 
     const publishedTests =
@@ -263,17 +266,22 @@ export async function GET(request: Request) {
         );
 
         return {
-          attemptId: attempt.id,
-          testId: test?.id ?? "",
+          attemptId:
+            attempt.id,
+          testId:
+            test?.id ?? "",
           title:
             test?.title ??
             "Test fără titlu",
-          score: attempt.score,
+          score:
+            attempt.score,
           totalQuestions:
             attempt.total_questions,
-          percentage: Number(
-            attempt.percentage ?? 0
-          ),
+          grade:
+            calculateGrade(
+              attempt.score,
+              attempt.total_questions
+            ),
           durationSeconds:
             attempt.duration_seconds,
           completedAt:
@@ -297,11 +305,12 @@ export async function GET(request: Request) {
           "",
       },
       stats: {
-        testsTaken: attempts.length,
+        testsTaken:
+          attempts.length,
         publishedTests,
         totalPoints,
         maximumPoints,
-        averagePercentage,
+        averageGrade,
         participationPercentage,
       },
       history,
