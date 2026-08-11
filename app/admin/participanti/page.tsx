@@ -3,6 +3,7 @@
 import Link from "next/link";
 import {
   ChangeEvent,
+  useEffect,
   useState,
 } from "react";
 import * as XLSX from "xlsx";
@@ -29,6 +30,38 @@ interface AccountCreationResult {
   failed: number;
   remaining: number;
   errors: string[];
+}
+
+interface ActivationUser {
+  participantId: string;
+  firstName: string;
+  lastName: string;
+  fullName: string;
+  email: string;
+  hasAccount: boolean;
+  activated: boolean;
+  lastSignInAt: string | null;
+}
+
+interface ActivationStats {
+  total: number;
+  withAccount: number;
+  activated: number;
+  notActivated: number;
+  withoutAccount: number;
+}
+
+interface ActivationListResponse {
+  users: ActivationUser[];
+  stats: ActivationStats;
+}
+
+interface SendEmailResult {
+  sent: number;
+  failed: number;
+  skipped: number;
+  errors: string[];
+  message: string;
 }
 
 function normalizeHeader(value: string) {
@@ -75,6 +108,206 @@ export default function ParticipantsAdminPage() {
 
   const [accountResult, setAccountResult] =
     useState<AccountCreationResult | null>(null);
+
+  const [activationUsers, setActivationUsers] =
+    useState<ActivationUser[]>([]);
+
+  const [activationStats, setActivationStats] =
+    useState<ActivationStats | null>(null);
+
+  const [isLoadingActivations, setIsLoadingActivations] =
+    useState(true);
+
+  const [activationError, setActivationError] =
+    useState("");
+
+  const [selectedActivationIds, setSelectedActivationIds] =
+    useState<string[]>([]);
+
+  const [isSendingActivation, setIsSendingActivation] =
+    useState(false);
+
+  const [sendingParticipantId, setSendingParticipantId] =
+    useState<string | null>(null);
+
+  const [sendResult, setSendResult] =
+    useState<SendEmailResult | null>(null);
+
+  async function loadActivationUsers() {
+    setIsLoadingActivations(true);
+    setActivationError("");
+
+    try {
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+
+      if (
+        sessionError ||
+        !session?.access_token
+      ) {
+        throw new Error(
+          "Trebuie să fii autentificat ca administrator."
+        );
+      }
+
+      const response = await fetch(
+        "/api/admin/participanti/invitatii",
+        {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          cache: "no-store",
+        }
+      );
+
+      const result = (await response.json()) as
+        | ActivationListResponse
+        | { error: string };
+
+      if (!response.ok || "error" in result) {
+        throw new Error(
+          "error" in result
+            ? result.error
+            : "Lista conturilor nu a putut fi încărcată."
+        );
+      }
+
+      setActivationUsers(result.users);
+      setActivationStats(result.stats);
+
+      setSelectedActivationIds((current) =>
+        current.filter((participantId) =>
+          result.users.some(
+            (user) =>
+              user.participantId === participantId &&
+              user.hasAccount &&
+              !user.activated
+          )
+        )
+      );
+    } catch (error) {
+      setActivationError(
+        error instanceof Error
+          ? error.message
+          : "Lista conturilor nu a putut fi încărcată."
+      );
+    } finally {
+      setIsLoadingActivations(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadActivationUsers();
+  }, []);
+
+  function toggleActivationSelection(
+    participantId: string
+  ) {
+    setSelectedActivationIds((current) =>
+      current.includes(participantId)
+        ? current.filter(
+            (id) => id !== participantId
+          )
+        : [...current, participantId]
+    );
+  }
+
+  function selectAllUnactivated() {
+    setSelectedActivationIds(
+      activationUsers
+        .filter(
+          (user) =>
+            user.hasAccount &&
+            !user.activated
+        )
+        .map((user) => user.participantId)
+    );
+  }
+
+  async function sendAccountEmail(options: {
+    mode: "activation" | "reset";
+    participantIds?: string[];
+    allUnactivated?: boolean;
+    participantIdForLoading?: string;
+  }) {
+    setActivationError("");
+    setSendResult(null);
+
+    if (options.participantIdForLoading) {
+      setSendingParticipantId(
+        options.participantIdForLoading
+      );
+    } else {
+      setIsSendingActivation(true);
+    }
+
+    try {
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+
+      if (
+        sessionError ||
+        !session?.access_token
+      ) {
+        throw new Error(
+          "Trebuie să fii autentificat ca administrator."
+        );
+      }
+
+      const response = await fetch(
+        "/api/admin/participanti/invitatii",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            mode: options.mode,
+            participantIds:
+              options.participantIds,
+            allUnactivated:
+              options.allUnactivated === true,
+          }),
+        }
+      );
+
+      const result = (await response.json()) as
+        | (SendEmailResult & {
+            success: true;
+          })
+        | { error: string };
+
+      if (!response.ok || "error" in result) {
+        throw new Error(
+          "error" in result
+            ? result.error
+            : "Emailul nu a putut fi trimis."
+        );
+      }
+
+      setSendResult(result);
+
+      if (options.mode === "activation") {
+        setSelectedActivationIds([]);
+      }
+
+      await loadActivationUsers();
+    } catch (error) {
+      setActivationError(
+        error instanceof Error
+          ? error.message
+          : "Emailul nu a putut fi trimis."
+      );
+    } finally {
+      setIsSendingActivation(false);
+      setSendingParticipantId(null);
+    }
+  }
 
   async function handleExcelImport(
     event: ChangeEvent<HTMLInputElement>
@@ -330,6 +563,7 @@ export default function ParticipantsAdminPage() {
       );
     } finally {
       setIsCreatingAccounts(false);
+      await loadActivationUsers();
     }
   }
 
@@ -588,6 +822,300 @@ export default function ParticipantsAdminPage() {
             </div>
           )}
         </section>
+
+        <section className="mt-8 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">
+                Activare și resetare parolă
+              </h2>
+
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-600">
+                Trimite linkul prin care arbitrul își setează parola
+                pentru prima dată. Pentru conturile deja activate poți
+                trimite oricând un link de resetare a parolei.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() =>
+                void loadActivationUsers()
+              }
+              disabled={isLoadingActivations}
+              className="inline-flex items-center justify-center rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isLoadingActivations
+                ? "Se actualizează..."
+                : "Actualizează lista"}
+            </button>
+          </div>
+
+          {activationStats && (
+            <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <ResultItem
+                label="Cu cont"
+                value={activationStats.withAccount}
+              />
+              <ResultItem
+                label="Activate"
+                value={activationStats.activated}
+              />
+              <ResultItem
+                label="Neactivate"
+                value={activationStats.notActivated}
+              />
+              <ResultItem
+                label="Fără cont"
+                value={activationStats.withoutAccount}
+              />
+            </div>
+          )}
+
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+            <button
+              type="button"
+              onClick={() =>
+                void sendAccountEmail({
+                  mode: "activation",
+                  allUnactivated: true,
+                })
+              }
+              disabled={
+                isSendingActivation ||
+                (activationStats?.notActivated ?? 0) === 0
+              }
+              className="inline-flex items-center justify-center rounded-xl bg-green-600 px-5 py-3 font-semibold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-400"
+            >
+              {isSendingActivation
+                ? "Se trimit emailurile..."
+                : "Trimite tuturor neactivaților"}
+            </button>
+
+            <button
+              type="button"
+              onClick={() =>
+                void sendAccountEmail({
+                  mode: "activation",
+                  participantIds:
+                    selectedActivationIds,
+                })
+              }
+              disabled={
+                isSendingActivation ||
+                selectedActivationIds.length === 0
+              }
+              className="inline-flex items-center justify-center rounded-xl border border-green-600 bg-white px-5 py-3 font-semibold text-green-700 transition hover:bg-green-50 disabled:cursor-not-allowed disabled:border-gray-300 disabled:text-gray-400"
+            >
+              Trimite activare selectaților
+              {selectedActivationIds.length > 0
+                ? ` (${selectedActivationIds.length})`
+                : ""}
+            </button>
+
+            <button
+              type="button"
+              onClick={selectAllUnactivated}
+              disabled={
+                (activationStats?.notActivated ?? 0) === 0
+              }
+              className="inline-flex items-center justify-center rounded-xl border border-gray-300 bg-white px-5 py-3 font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:text-gray-400"
+            >
+              Selectează toți neactivații
+            </button>
+          </div>
+
+          <p className="mt-4 text-xs leading-5 text-gray-500">
+            „Neactivat” înseamnă că utilizatorul nu și-a setat încă
+            parola prin linkul primit de la platformă.
+          </p>
+
+          {activationError && (
+            <div className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+              {activationError}
+            </div>
+          )}
+
+          {sendResult && (
+            <div className="mt-5 rounded-xl border border-green-200 bg-green-50 p-5">
+              <p className="font-semibold text-green-800">
+                {sendResult.message}
+              </p>
+
+              <p className="mt-2 text-sm text-green-700">
+                Trimise: {sendResult.sent} · Omise:{" "}
+                {sendResult.skipped} · Erori:{" "}
+                {sendResult.failed}
+              </p>
+
+              {sendResult.errors.length > 0 && (
+                <ul className="mt-3 space-y-1 text-sm text-red-700">
+                  {sendResult.errors.map((message) => (
+                    <li key={message}>{message}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
+          <div className="mt-6 overflow-hidden rounded-xl border border-gray-200">
+            <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
+              <p className="text-sm font-semibold text-gray-700">
+                Conturi participanți
+              </p>
+            </div>
+
+            {isLoadingActivations ? (
+              <div className="p-8 text-center text-sm text-gray-600">
+                Se încarcă lista...
+              </div>
+            ) : activationUsers.length === 0 ? (
+              <div className="p-8 text-center text-sm text-gray-600">
+                Nu există participanți activi.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[820px] text-left text-sm">
+                  <thead className="bg-white text-gray-500">
+                    <tr>
+                      <th className="w-12 px-4 py-3 font-semibold">
+                        Sel.
+                      </th>
+                      <th className="px-4 py-3 font-semibold">
+                        Arbitru
+                      </th>
+                      <th className="px-4 py-3 font-semibold">
+                        Email
+                      </th>
+                      <th className="px-4 py-3 font-semibold">
+                        Status
+                      </th>
+                      <th className="px-4 py-3 text-right font-semibold">
+                        Acțiune
+                      </th>
+                    </tr>
+                  </thead>
+
+                  <tbody className="divide-y divide-gray-100">
+                    {activationUsers.map((user) => {
+                      const canActivate =
+                        user.hasAccount &&
+                        !user.activated;
+
+                      return (
+                        <tr key={user.participantId}>
+                          <td className="px-4 py-3">
+                            <input
+                              type="checkbox"
+                              checked={selectedActivationIds.includes(
+                                user.participantId
+                              )}
+                              disabled={!canActivate}
+                              onChange={() =>
+                                toggleActivationSelection(
+                                  user.participantId
+                                )
+                              }
+                              className="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500 disabled:opacity-40"
+                              aria-label={`Selectează ${user.fullName}`}
+                            />
+                          </td>
+
+                          <td className="px-4 py-3 font-semibold text-gray-900">
+                            {user.fullName}
+                          </td>
+
+                          <td className="px-4 py-3 text-gray-600">
+                            {user.email || "—"}
+                          </td>
+
+                          <td className="px-4 py-3">
+                            {!user.hasAccount ? (
+                              <span className="inline-flex rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600">
+                                Fără cont
+                              </span>
+                            ) : user.activated ? (
+                              <span className="inline-flex rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
+                                Activat
+                              </span>
+                            ) : (
+                              <span className="inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">
+                                Neactivat
+                              </span>
+                            )}
+                          </td>
+
+                          <td className="px-4 py-3">
+                            <div className="flex justify-end gap-2">
+                              {canActivate && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    void sendAccountEmail({
+                                      mode: "activation",
+                                      participantIds: [
+                                        user.participantId,
+                                      ],
+                                      participantIdForLoading:
+                                        user.participantId,
+                                    })
+                                  }
+                                  disabled={
+                                    sendingParticipantId !== null ||
+                                    isSendingActivation
+                                  }
+                                  className="rounded-lg bg-green-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-400"
+                                >
+                                  {sendingParticipantId ===
+                                  user.participantId
+                                    ? "Se trimite..."
+                                    : "Trimite activare"}
+                                </button>
+                              )}
+
+                              {user.hasAccount && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const confirmed =
+                                      window.confirm(
+                                        `Trimiți un email de resetare a parolei către ${user.fullName} (${user.email})?`
+                                      );
+
+                                    if (!confirmed) {
+                                      return;
+                                    }
+
+                                    void sendAccountEmail({
+                                      mode: "reset",
+                                      participantIds: [
+                                        user.participantId,
+                                      ],
+                                      participantIdForLoading:
+                                        user.participantId,
+                                    });
+                                  }}
+                                  disabled={
+                                    sendingParticipantId !== null ||
+                                    isSendingActivation
+                                  }
+                                  className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  Resetare parolă
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </section>
+
       </div>
     </main>
   );
