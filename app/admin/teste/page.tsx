@@ -185,21 +185,17 @@ export default function AdminTestsPage() {
 
   async function handleDelete(test: AdminTest) {
     if (test.isActive) {
-      setError(
-        "Testul activ nu poate fi șters."
+      const confirmedActive = window.confirm(
+        `ATENȚIE: „${test.title}” este testul activ.\n\nDacă îl ștergi, platforma nu va mai avea niciun test activ până când publici altul.\n\nContinui?`
       );
-      return;
-    }
 
-    if (test.attemptCount > 0) {
-      setError(
-        "Testul nu poate fi șters deoarece are deja rezultate salvate."
-      );
-      return;
+      if (!confirmedActive) {
+        return;
+      }
     }
 
     const confirmed = window.confirm(
-      `Ești sigur că vrei să ștergi testul „${test.title}”?\n\nTestul și toate întrebările lui vor fi șterse definitiv.`
+      `Ești sigur că vrei să ștergi testul „${test.title}”?\n\nSe vor șterge definitiv testul, întrebările, rezultatele și răspunsurile asociate.`
     );
 
     if (!confirmed) {
@@ -434,6 +430,23 @@ export default function AdminTestsPage() {
                         <span className="inline-flex items-center rounded-xl bg-green-100 px-4 py-2.5 text-sm font-semibold text-green-700">
                           Test activ
                         </span>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleDelete(test)
+                          }
+                          disabled={
+                            deletingId !== null ||
+                            publishingId !== null
+                          }
+                          title="Șterge testul"
+                          className="rounded-xl border border-red-300 bg-white px-4 py-2.5 text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:border-gray-200 disabled:text-gray-400 disabled:hover:bg-white"
+                        >
+                          {deletingId === test.id
+                            ? "Se șterge..."
+                            : "Șterge"}
+                        </button>
                       </>
                     ) : (
                       <>
@@ -460,14 +473,9 @@ export default function AdminTestsPage() {
                           }
                           disabled={
                             deletingId !== null ||
-                            publishingId !== null ||
-                            test.attemptCount > 0
+                            publishingId !== null
                           }
-                          title={
-                            test.attemptCount > 0
-                              ? "Testele cu rezultate nu pot fi șterse."
-                              : "Șterge testul"
-                          }
+                          title="Șterge testul"
                           className="rounded-xl border border-red-300 bg-white px-4 py-2.5 text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:border-gray-200 disabled:text-gray-400 disabled:hover:bg-white"
                         >
                           {deletingId === test.id
