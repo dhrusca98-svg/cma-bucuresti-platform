@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
 import { supabase } from "@/lib/supabase/client";
 
 interface ActiveTest {
@@ -356,6 +357,8 @@ export default function Home() {
           </div>
         </div>
       </main>
+
+      <Footer />
     </div>
   );
 }

@@ -11,6 +11,7 @@ export default function Navbar() {
     setMenuOpen(false);
   }
 
+  // Blochează scroll-ul paginii când meniul mobil este deschis
   useEffect(() => {
     if (menuOpen) {
       document.body.style.overflow = "hidden";
@@ -25,9 +26,39 @@ export default function Navbar() {
 
   return (
     <>
+      {/* HEADER */}
       <header className="relative z-40 border-b border-gray-200 bg-white">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
-          <Link href="/" className="flex items-center">
+          
+          {/* MOBILE - Hamburger stânga */}
+          <button
+            type="button"
+            onClick={() => setMenuOpen(true)}
+            className="rounded-lg border border-gray-300 p-2 transition hover:bg-gray-50 md:hidden"
+            aria-label="Deschide meniul"
+            aria-expanded={menuOpen}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-6 w-6 text-gray-700"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M4 6h16M4 12h16M4 18h16"
+              />
+            </svg>
+          </button>
+
+          {/* DESKTOP - Logo stânga */}
+          <Link
+            href="/"
+            className="hidden items-center md:flex"
+          >
             <Image
               src="/images/amfb-logo.png"
               alt="Logo AMFB"
@@ -38,7 +69,7 @@ export default function Navbar() {
             />
           </Link>
 
-          {/* Desktop */}
+          {/* DESKTOP - Meniu dreapta */}
           <nav className="hidden items-center gap-6 text-sm font-medium text-gray-700 md:flex">
             <Link
               href="/"
@@ -69,33 +100,24 @@ export default function Navbar() {
             </Link>
           </nav>
 
-          {/* Mobile Hamburger */}
-          <button
-            type="button"
-            onClick={() => setMenuOpen(true)}
-            className="rounded-lg border border-gray-300 p-2 transition hover:bg-gray-50 md:hidden"
-            aria-label="Deschide meniul"
-            aria-expanded={menuOpen}
+          {/* MOBILE - Logo dreapta */}
+          <Link
+            href="/"
+            className="flex items-center md:hidden"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-6 w-6 text-gray-700"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M4 6h16M4 12h16M4 18h16"
-              />
-            </svg>
-          </button>
+            <Image
+              src="/images/amfb-logo.png"
+              alt="Logo AMFB"
+              width={52}
+              height={52}
+              priority
+              className="h-12 w-12 object-contain"
+            />
+          </Link>
         </div>
       </header>
 
-      {/* Mobile overlay */}
+      {/* FUNDAL ÎNTUNECAT PE MOBILE */}
       <div
         onClick={closeMenu}
         className={`fixed inset-0 z-40 bg-black/50 transition-opacity duration-300 md:hidden ${
@@ -105,7 +127,7 @@ export default function Navbar() {
         }`}
       />
 
-      {/* Mobile side drawer */}
+      {/* MENIU LATERAL MOBILE */}
       <aside
         className={`fixed left-0 top-0 z-50 h-screen w-[82%] max-w-sm bg-white shadow-2xl transition-transform duration-300 ease-out md:hidden ${
           menuOpen
@@ -113,6 +135,7 @@ export default function Navbar() {
             : "-translate-x-full"
         }`}
       >
+        {/* Partea de sus a meniului */}
         <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
           <Link
             href="/"
@@ -128,6 +151,7 @@ export default function Navbar() {
             />
           </Link>
 
+          {/* X */}
           <button
             type="button"
             onClick={closeMenu}
@@ -151,6 +175,7 @@ export default function Navbar() {
           </button>
         </div>
 
+        {/* Link-uri */}
         <nav className="px-3 py-4">
           <MobileLink
             href="/"
@@ -177,6 +202,7 @@ export default function Navbar() {
           />
         </nav>
 
+        {/* Footer meniu */}
         <div className="absolute bottom-0 left-0 right-0 border-t border-gray-200 px-5 py-4">
           <p className="text-xs leading-5 text-gray-400">
             Comisia Municipală a Arbitrilor București
