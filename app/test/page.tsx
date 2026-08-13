@@ -98,12 +98,16 @@ export default function TestPage() {
           return;
         }
 
+        const nowIso = new Date().toISOString();
+
         const { data, error } = await supabase
           .from("tests")
           .select(`
             id,
             title,
             time_per_question,
+            available_until,
+            created_at,
             questions (
               id,
               order_number,
@@ -118,10 +122,21 @@ export default function TestPage() {
             )
           `)
           .eq("is_active", true)
-          .single();
+          .gt("available_until", nowIso)
+          .order("created_at", {
+            ascending: false,
+          })
+          .limit(1)
+          .maybeSingle();
 
-        if (error || !data) {
-          throw error ?? new Error("Nu există test activ.");
+        if (error) {
+          throw error;
+        }
+
+        if (!data) {
+          throw new Error(
+            "Testul nu mai este disponibil sau perioada de susținere a expirat."
+          );
         }
 
         const formattedTest: ActiveTest = {

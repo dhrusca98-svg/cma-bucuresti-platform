@@ -4,61 +4,92 @@ function requireEnvironmentVariable(name: string) {
   const value = process.env[name];
 
   if (!value) {
-    throw new Error(`Lipsește variabila de mediu ${name}.`);
+    throw new Error(
+      `Lipsește variabila de mediu ${name}.`
+    );
   }
 
   return value;
 }
 
 function createClients() {
-  const supabaseUrl = requireEnvironmentVariable(
-    "NEXT_PUBLIC_SUPABASE_URL"
-  );
-  const publishableKey = requireEnvironmentVariable(
-    "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"
-  );
-  const secretKey = requireEnvironmentVariable(
-    "SUPABASE_SECRET_KEY"
+  const supabaseUrl =
+    requireEnvironmentVariable(
+      "NEXT_PUBLIC_SUPABASE_URL"
+    );
+
+  const publishableKey =
+    requireEnvironmentVariable(
+      "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"
+    );
+
+  const secretKey =
+    requireEnvironmentVariable(
+      "SUPABASE_SECRET_KEY"
+    );
+
+  const authClient = createClient(
+    supabaseUrl,
+    publishableKey,
+    {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+        detectSessionInUrl: false,
+      },
+    }
   );
 
-  const authClient = createClient(supabaseUrl, publishableKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-      detectSessionInUrl: false,
-    },
-  });
+  const adminClient = createClient(
+    supabaseUrl,
+    secretKey,
+    {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+        detectSessionInUrl: false,
+      },
+    }
+  );
 
-  const adminClient = createClient(supabaseUrl, secretKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-      detectSessionInUrl: false,
-    },
-  });
-
-  return { authClient, adminClient };
+  return {
+    authClient,
+    adminClient,
+  };
 }
 
-async function requireAdministrator(request: Request) {
-  const { authClient, adminClient } = createClients();
-  const adminEmail = requireEnvironmentVariable(
-    "ADMIN_EMAIL"
-  )
-    .trim()
-    .toLowerCase();
+async function requireAdministrator(
+  request: Request
+) {
+  const {
+    authClient,
+    adminClient,
+  } = createClients();
+
+  const adminEmail =
+    requireEnvironmentVariable(
+      "ADMIN_EMAIL"
+    )
+      .trim()
+      .toLowerCase();
 
   const authorization =
-    request.headers.get("authorization") ?? "";
+    request.headers.get(
+      "authorization"
+    ) ?? "";
 
-  const accessToken = authorization.startsWith("Bearer ")
-    ? authorization.slice(7)
-    : "";
+  const accessToken =
+    authorization.startsWith("Bearer ")
+      ? authorization.slice(7)
+      : "";
 
   if (!accessToken) {
     return {
       errorResponse: Response.json(
-        { error: "Trebuie să fii autentificat." },
+        {
+          error:
+            "Trebuie să fii autentificat.",
+        },
         { status: 401 }
       ),
     };
@@ -67,19 +98,27 @@ async function requireAdministrator(request: Request) {
   const {
     data: { user },
     error: userError,
-  } = await authClient.auth.getUser(accessToken);
+  } =
+    await authClient.auth.getUser(
+      accessToken
+    );
 
   if (userError || !user) {
     return {
       errorResponse: Response.json(
-        { error: "Sesiunea nu este validă." },
+        {
+          error:
+            "Sesiunea nu este validă.",
+        },
         { status: 401 }
       ),
     };
   }
 
   if (
-    user.email?.trim().toLowerCase() !== adminEmail
+    user.email
+      ?.trim()
+      .toLowerCase() !== adminEmail
   ) {
     return {
       errorResponse: Response.json(
@@ -92,59 +131,91 @@ async function requireAdministrator(request: Request) {
     };
   }
 
-  return { adminClient };
+  return {
+    adminClient,
+  };
 }
 
-export async function GET(request: Request) {
+/* =========================================================
+   GET
+========================================================= */
+
+export async function GET(
+  request: Request
+) {
   try {
     const adminResult =
-      await requireAdministrator(request);
+      await requireAdministrator(
+        request
+      );
 
     if (adminResult.errorResponse) {
       return adminResult.errorResponse;
     }
 
-    const { adminClient } = adminResult;
+    const {
+      adminClient,
+    } = adminResult;
 
-    const { data: tests, error: testsError } =
-      await adminClient
-        .from("tests")
-        .select(`
-          id,
-          title,
-          time_per_question,
-          is_active,
-          created_at,
-          questions ( id ),
-          attempts ( id )
-        `)
-        .order("created_at", {
-          ascending: false,
-        });
+    const {
+      data: tests,
+      error: testsError,
+    } = await adminClient
+      .from("tests")
+      .select(`
+        id,
+        title,
+        time_per_question,
+        is_active,
+        available_until,
+        created_at,
+        questions ( id ),
+        attempts ( id )
+      `)
+      .order("created_at", {
+        ascending: false,
+      });
 
     if (testsError) {
-      throw new Error(testsError.message);
+      throw new Error(
+        testsError.message
+      );
     }
 
     return Response.json({
-      tests: (tests ?? []).map((test) => ({
-        id: test.id,
-        title: test.title,
-        timePerQuestion:
-          test.time_per_question,
-        isActive: test.is_active === true,
-        createdAt: test.created_at,
-        questionCount: Array.isArray(
-          test.questions
-        )
-          ? test.questions.length
-          : 0,
-        attemptCount: Array.isArray(
-          test.attempts
-        )
-          ? test.attempts.length
-          : 0,
-      })),
+      tests: (tests ?? []).map(
+        (test) => ({
+          id: test.id,
+
+          title: test.title,
+
+          timePerQuestion:
+            test.time_per_question,
+
+          isActive:
+            test.is_active === true,
+
+          availableUntil:
+            test.available_until,
+
+          createdAt:
+            test.created_at,
+
+          questionCount:
+            Array.isArray(
+              test.questions
+            )
+              ? test.questions.length
+              : 0,
+
+          attemptCount:
+            Array.isArray(
+              test.attempts
+            )
+              ? test.attempts.length
+              : 0,
+        })
+      ),
     });
   } catch (error) {
     console.error(
@@ -164,40 +235,80 @@ export async function GET(request: Request) {
   }
 }
 
-export async function POST(request: Request) {
+/* =========================================================
+   POST - PUBLICARE
+========================================================= */
+
+export async function POST(
+  request: Request
+) {
   try {
     const adminResult =
-      await requireAdministrator(request);
+      await requireAdministrator(
+        request
+      );
 
     if (adminResult.errorResponse) {
       return adminResult.errorResponse;
     }
 
-    const { adminClient } = adminResult;
+    const {
+      adminClient,
+    } = adminResult;
 
-    const body = (await request.json()) as {
-      testId?: string;
-    };
+    const body =
+      (await request.json()) as {
+        testId?: string;
+        availabilityDays?: number;
+      };
 
-    const testId = body.testId?.trim();
+    const testId =
+      body.testId?.trim();
+
+    const availabilityDays =
+      Number(body.availabilityDays);
 
     if (!testId) {
       return Response.json(
-        { error: "Lipsește testul selectat." },
+        {
+          error:
+            "Lipsește testul selectat.",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (
+      !Number.isInteger(
+        availabilityDays
+      ) ||
+      availabilityDays < 1 ||
+      availabilityDays > 30
+    ) {
+      return Response.json(
+        {
+          error:
+            "Durata testului trebuie să fie între 1 și 30 de zile.",
+        },
         { status: 400 }
       );
     }
 
     const {
       data: selectedTest,
-      error: selectedTestError,
+      error:
+        selectedTestError,
     } = await adminClient
       .from("tests")
-      .select("id, title, is_active")
+      .select(
+        "id, title, is_active, available_until"
+      )
       .eq("id", testId)
       .maybeSingle();
 
-    if (selectedTestError) {
+    if (
+      selectedTestError
+    ) {
       throw new Error(
         selectedTestError.message
       );
@@ -205,37 +316,41 @@ export async function POST(request: Request) {
 
     if (!selectedTest) {
       return Response.json(
-        { error: "Testul selectat nu există." },
+        {
+          error:
+            "Testul selectat nu există.",
+        },
         { status: 404 }
       );
     }
 
-    if (selectedTest.is_active === true) {
-      return Response.json({
-        success: true,
-        message:
-          "Testul selectat este deja activ.",
-      });
-    }
-
     const {
       count: questionCount,
-      error: questionCountError,
+      error:
+        questionCountError,
     } = await adminClient
       .from("questions")
       .select("id", {
         count: "exact",
         head: true,
       })
-      .eq("test_id", testId);
+      .eq(
+        "test_id",
+        testId
+      );
 
-    if (questionCountError) {
+    if (
+      questionCountError
+    ) {
       throw new Error(
         questionCountError.message
       );
     }
 
-    if ((questionCount ?? 0) === 0) {
+    if (
+      (questionCount ?? 0) ===
+      0
+    ) {
       return Response.json(
         {
           error:
@@ -245,11 +360,21 @@ export async function POST(request: Request) {
       );
     }
 
-    const { error: deactivateError } =
-      await adminClient
-        .from("tests")
-        .update({ is_active: false })
-        .eq("is_active", true);
+    /*
+     * Dezactivăm testul curent.
+     */
+    const {
+      error:
+        deactivateError,
+    } = await adminClient
+      .from("tests")
+      .update({
+        is_active: false,
+      })
+      .eq(
+        "is_active",
+        true
+      );
 
     if (deactivateError) {
       throw new Error(
@@ -257,11 +382,36 @@ export async function POST(request: Request) {
       );
     }
 
-    const { error: activateError } =
-      await adminClient
-        .from("tests")
-        .update({ is_active: true })
-        .eq("id", testId);
+    /*
+     * Calculăm termenul-limită.
+     */
+    const now =
+      new Date();
+
+    const availableUntil =
+      new Date(
+        now.getTime() +
+          availabilityDays *
+            24 *
+            60 *
+            60 *
+            1000
+      );
+
+    /*
+     * Publicăm testul selectat.
+     */
+    const {
+      error:
+        activateError,
+    } = await adminClient
+      .from("tests")
+      .update({
+        is_active: true,
+        available_until:
+          availableUntil.toISOString(),
+      })
+      .eq("id", testId);
 
     if (activateError) {
       throw new Error(
@@ -271,7 +421,16 @@ export async function POST(request: Request) {
 
     return Response.json({
       success: true,
-      message: `„${selectedTest.title}” este acum testul activ.`,
+
+      availableUntil:
+        availableUntil.toISOString(),
+
+      message:
+        `„${selectedTest.title}” a fost publicat pentru ${availabilityDays} ${
+          availabilityDays === 1
+            ? "zi"
+            : "zile"
+        }.`,
     });
   } catch (error) {
     console.error(
@@ -291,40 +450,60 @@ export async function POST(request: Request) {
   }
 }
 
-export async function DELETE(request: Request) {
+/* =========================================================
+   DELETE
+========================================================= */
+
+export async function DELETE(
+  request: Request
+) {
   try {
     const adminResult =
-      await requireAdministrator(request);
+      await requireAdministrator(
+        request
+      );
 
     if (adminResult.errorResponse) {
       return adminResult.errorResponse;
     }
 
-    const { adminClient } = adminResult;
+    const {
+      adminClient,
+    } = adminResult;
 
-    const body = (await request.json()) as {
-      testId?: string;
-    };
+    const body =
+      (await request.json()) as {
+        testId?: string;
+      };
 
-    const testId = body.testId?.trim();
+    const testId =
+      body.testId?.trim();
 
     if (!testId) {
       return Response.json(
-        { error: "Lipsește testul selectat." },
+        {
+          error:
+            "Lipsește testul selectat.",
+        },
         { status: 400 }
       );
     }
 
     const {
       data: selectedTest,
-      error: selectedTestError,
+      error:
+        selectedTestError,
     } = await adminClient
       .from("tests")
-      .select("id, title, is_active")
+      .select(
+        "id, title, is_active"
+      )
       .eq("id", testId)
       .maybeSingle();
 
-    if (selectedTestError) {
+    if (
+      selectedTestError
+    ) {
       throw new Error(
         selectedTestError.message
       );
@@ -332,74 +511,115 @@ export async function DELETE(request: Request) {
 
     if (!selectedTest) {
       return Response.json(
-        { error: "Testul selectat nu există." },
+        {
+          error:
+            "Testul selectat nu există.",
+        },
         { status: 404 }
       );
     }
 
     const {
       data: attempts,
-      error: attemptsReadError,
+      error:
+        attemptsReadError,
     } = await adminClient
       .from("attempts")
       .select("id")
-      .eq("test_id", testId);
+      .eq(
+        "test_id",
+        testId
+      );
 
-    if (attemptsReadError) {
+    if (
+      attemptsReadError
+    ) {
       throw new Error(
         attemptsReadError.message
       );
     }
 
-    const attemptIds = (attempts ?? []).map(
-      (attempt) => attempt.id
-    );
+    const attemptIds =
+      (attempts ?? []).map(
+        (attempt) =>
+          attempt.id
+      );
 
-    if (attemptIds.length > 0) {
-      const { error: answersDeleteError } =
-        await adminClient
-          .from("answers")
-          .delete()
-          .in("attempt_id", attemptIds);
+    if (
+      attemptIds.length > 0
+    ) {
+      const {
+        error:
+          answersDeleteError,
+      } = await adminClient
+        .from("answers")
+        .delete()
+        .in(
+          "attempt_id",
+          attemptIds
+        );
 
-      if (answersDeleteError) {
+      if (
+        answersDeleteError
+      ) {
         throw new Error(
           answersDeleteError.message
         );
       }
     }
 
-    const { error: attemptsDeleteError } =
-      await adminClient
-        .from("attempts")
-        .delete()
-        .eq("test_id", testId);
+    const {
+      error:
+        attemptsDeleteError,
+    } = await adminClient
+      .from("attempts")
+      .delete()
+      .eq(
+        "test_id",
+        testId
+      );
 
-    if (attemptsDeleteError) {
+    if (
+      attemptsDeleteError
+    ) {
       throw new Error(
         attemptsDeleteError.message
       );
     }
 
-    const { error: questionsDeleteError } =
-      await adminClient
-        .from("questions")
-        .delete()
-        .eq("test_id", testId);
+    const {
+      error:
+        questionsDeleteError,
+    } = await adminClient
+      .from("questions")
+      .delete()
+      .eq(
+        "test_id",
+        testId
+      );
 
-    if (questionsDeleteError) {
+    if (
+      questionsDeleteError
+    ) {
       throw new Error(
         questionsDeleteError.message
       );
     }
 
-    const { error: testDeleteError } =
-      await adminClient
-        .from("tests")
-        .delete()
-        .eq("id", testId);
+    const {
+      error:
+        testDeleteError,
+    } = await adminClient
+      .from("tests")
+      .delete()
+      .eq(
+        "id",
+        testId
+      );
 
-    if (testDeleteError) {
+    if (
+      testDeleteError
+    ) {
       throw new Error(
         testDeleteError.message
       );
@@ -407,11 +627,15 @@ export async function DELETE(request: Request) {
 
     return Response.json({
       success: true,
+
       wasActive:
-        selectedTest.is_active === true,
-      message: selectedTest.is_active
-        ? `„${selectedTest.title}” a fost șters. Nu mai există un test activ până când publici altul.`
-        : `„${selectedTest.title}” a fost șters împreună cu rezultatele asociate.`,
+        selectedTest.is_active ===
+        true,
+
+      message:
+        selectedTest.is_active
+          ? `„${selectedTest.title}” a fost șters. Nu mai există un test activ până când publici altul.`
+          : `„${selectedTest.title}” a fost șters împreună cu rezultatele asociate.`,
     });
   } catch (error) {
     console.error(
