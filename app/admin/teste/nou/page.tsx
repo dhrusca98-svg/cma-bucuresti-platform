@@ -6,6 +6,7 @@ import {
   useState,
 } from "react";
 import * as XLSX from "xlsx";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 
 interface DraftQuestion {
@@ -37,6 +38,8 @@ const EMPTY_QUESTION: Omit<DraftQuestion, "id"> = {
 };
 
 export default function NewTestPage() {
+  const router = useRouter();
+
   const [title, setTitle] = useState("Test teoretic");
   const [timePerQuestion, setTimePerQuestion] = useState(90);
 
@@ -50,7 +53,7 @@ export default function NewTestPage() {
   const [importMessage, setImportMessage] = useState("");
   const [importError, setImportError] = useState("");
   const [saveMessage, setSaveMessage] = useState("");
-  const [isPublishing, setIsPublishing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   function updateQuestion(
     questionIndex: number,
@@ -342,7 +345,7 @@ export default function NewTestPage() {
     };
   }
 
-  function handleSubmit(
+  async function handleSubmit(
     event: FormEvent<HTMLFormElement>
   ) {
     event.preventDefault();
@@ -356,31 +359,7 @@ export default function NewTestPage() {
       return;
     }
 
-    const newTest = buildTest();
-
-    localStorage.setItem(
-      "savedTest",
-      JSON.stringify(newTest)
-    );
-
-    console.log("Test salvat:", newTest);
-
-    setSaveMessage(
-      "Testul a fost salvat în browser. Nu este încă publicat."
-    );
-  }
-
-  async function handlePublish() {
-    setSaveMessage("");
-
-    const validationError = validateTest();
-
-    if (validationError) {
-      setSaveMessage(validationError);
-      return;
-    }
-
-    setIsPublishing(true);
+    setIsSaving(true);
 
     try {
       const {
@@ -437,7 +416,7 @@ export default function NewTestPage() {
       if (!response.ok || result.error) {
         throw new Error(
           result.error ||
-            "Testul nu a putut fi publicat."
+            "Testul nu a putut fi salvat."
         );
       }
 
@@ -446,21 +425,24 @@ export default function NewTestPage() {
 
       setSaveMessage(
         result.message ||
-          "Testul a fost publicat și este acum activ."
+          "Testul a fost salvat."
       );
+
+      router.push("/admin/teste");
+      router.refresh();
     } catch (error) {
       console.error(
-        "Eroare la publicarea testului:",
+        "Eroare la salvarea testului:",
         error
       );
 
       setSaveMessage(
         error instanceof Error
-          ? `Publicarea a eșuat: ${error.message}`
-          : "Publicarea testului a eșuat."
+          ? `Salvarea a eșuat: ${error.message}`
+          : "Salvarea testului a eșuat."
       );
     } finally {
-      setIsPublishing(false);
+      setIsSaving(false);
     }
   }
 
@@ -490,20 +472,12 @@ export default function NewTestPage() {
           <div className="flex flex-col gap-3 sm:flex-row">
             <button
               type="submit"
-              className="inline-flex items-center justify-center rounded-xl border border-green-600 bg-white px-5 py-3 font-semibold text-green-700 transition hover:bg-green-50 focus:outline-none focus:ring-4 focus:ring-green-100"
-            >
-              Salvează testul
-            </button>
-
-            <button
-              type="button"
-              onClick={handlePublish}
-              disabled={isPublishing}
+              disabled={isSaving}
               className="inline-flex items-center justify-center rounded-xl bg-green-600 px-5 py-3 font-semibold text-white transition hover:bg-green-700 focus:outline-none focus:ring-4 focus:ring-green-200 disabled:cursor-not-allowed disabled:bg-gray-400"
             >
-              {isPublishing
-                ? "Se publică..."
-                : "Publică testul"}
+              {isSaving
+                ? "Se salvează..."
+                : "Salvează testul"}
             </button>
           </div>
         </div>
@@ -798,20 +772,12 @@ export default function NewTestPage() {
 
           <button
             type="submit"
-            className="inline-flex items-center justify-center rounded-xl border border-green-600 bg-white px-5 py-3 font-semibold text-green-700 transition hover:bg-green-50 focus:outline-none focus:ring-4 focus:ring-green-100"
-          >
-            Salvează testul
-          </button>
-
-          <button
-            type="button"
-            onClick={handlePublish}
-            disabled={isPublishing}
+            disabled={isSaving}
             className="inline-flex items-center justify-center rounded-xl bg-green-600 px-5 py-3 font-semibold text-white transition hover:bg-green-700 focus:outline-none focus:ring-4 focus:ring-green-200 disabled:cursor-not-allowed disabled:bg-gray-400"
           >
-            {isPublishing
-              ? "Se publică..."
-              : "Publică testul"}
+            {isSaving
+              ? "Se salvează..."
+              : "Salvează testul"}
           </button>
         </div>
       </form>
