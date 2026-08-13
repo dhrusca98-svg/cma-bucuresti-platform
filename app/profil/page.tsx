@@ -29,6 +29,7 @@ interface ProfileResponse {
     fullName: string;
     email: string;
   };
+
   stats: {
     testsTaken: number;
     publishedTests: number;
@@ -36,7 +37,10 @@ interface ProfileResponse {
     maximumPoints: number;
     averageGrade: number;
     participationPercentage: number;
+    rankingPosition: number | null;
+    totalRankedParticipants: number;
   };
+
   history: ProfileHistoryItem[];
 }
 
@@ -58,7 +62,8 @@ export default function ProfilePage() {
         const {
           data: { session },
           error: sessionError,
-        } = await supabase.auth.getSession();
+        } =
+          await supabase.auth.getSession();
 
         if (
           sessionError ||
@@ -67,6 +72,7 @@ export default function ProfilePage() {
           router.replace(
             "/login?next=/profil"
           );
+
           return;
         }
 
@@ -122,6 +128,7 @@ export default function ProfilePage() {
       />
 
       <div className="fixed inset-0 bg-black/70" />
+
       <div className="fixed inset-0 bg-gradient-to-r from-black/80 via-black/60 to-black/50" />
 
       <div className="relative z-10">
@@ -168,12 +175,36 @@ export default function ProfilePage() {
                   </p>
                 </div>
 
-                <Link
-                  href="/clasament"
-                  className="inline-flex items-center justify-center rounded-xl border border-white/20 bg-black/40 px-5 py-3 font-semibold text-white backdrop-blur-md transition hover:bg-white/10"
-                >
-                  Vezi clasamentul
-                </Link>
+                <div className="rounded-2xl border border-green-400/30 bg-green-500/10 px-6 py-4 backdrop-blur-md">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-green-400">
+                    Loc general
+                  </p>
+
+                  {profile.stats.rankingPosition !==
+                  null ? (
+                    <div className="mt-1 flex items-baseline gap-2">
+                      <span className="text-3xl font-bold text-white">
+                        #
+                        {
+                          profile.stats
+                            .rankingPosition
+                        }
+                      </span>
+
+                      <span className="text-sm text-gray-300">
+                        din{" "}
+                        {
+                          profile.stats
+                            .totalRankedParticipants
+                        }
+                      </span>
+                    </div>
+                  ) : (
+                    <p className="mt-1 font-semibold text-white">
+                      Fără clasare
+                    </p>
+                  )}
+                </div>
               </div>
 
               <section className="mt-10 grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -197,7 +228,8 @@ export default function ProfilePage() {
                 <StatCard
                   label="Participare"
                   value={`${Math.round(
-                    profile.stats.participationPercentage
+                    profile.stats
+                      .participationPercentage
                   )}%`}
                 />
               </section>
@@ -217,7 +249,8 @@ export default function ProfilePage() {
                 {profile.history.length === 0 ? (
                   <div className="p-10 text-center">
                     <h3 className="text-lg font-bold text-gray-900">
-                      Nu ai susținut încă niciun test
+                      Nu ai susținut încă niciun
+                      test
                     </h3>
 
                     <p className="mt-2 text-gray-600">
@@ -227,7 +260,7 @@ export default function ProfilePage() {
                   </div>
                 ) : (
                   <>
-                    {/* Desktop */}
+                    {/* DESKTOP */}
                     <div className="hidden overflow-x-auto md:block">
                       <table className="w-full min-w-[760px] text-left">
                         <thead className="bg-gray-50 text-sm text-gray-500">
@@ -267,7 +300,9 @@ export default function ProfilePage() {
 
                                 <td className="px-5 py-4 text-center font-bold text-green-700">
                                   {item.score}/
-                                  {item.totalQuestions}
+                                  {
+                                    item.totalQuestions
+                                  }
                                 </td>
 
                                 <td className="px-5 py-4 text-center font-semibold text-gray-900">
@@ -294,7 +329,7 @@ export default function ProfilePage() {
                       </table>
                     </div>
 
-                    {/* Mobile */}
+                    {/* MOBILE */}
                     <div className="divide-y divide-gray-200 md:hidden">
                       {profile.history.map(
                         (item) => (
@@ -340,6 +375,15 @@ export default function ProfilePage() {
                   </>
                 )}
               </section>
+
+              <div className="mt-8 flex justify-center">
+                <Link
+                  href="/"
+                  className="inline-flex items-center justify-center rounded-xl bg-green-600 px-6 py-3 font-semibold text-white transition hover:bg-green-700"
+                >
+                  Înapoi la homepage
+                </Link>
+              </div>
             </>
           ) : null}
         </main>

@@ -8,6 +8,7 @@ interface TestJoin {
 
 interface AttemptRow {
   id: string;
+  participant_id?: string;
   score: number;
   total_questions: number;
   duration_seconds: number | null;
@@ -16,6 +17,27 @@ interface AttemptRow {
     | TestJoin
     | TestJoin[]
     | null;
+  participants?:
+    | {
+        first_name: string;
+        last_name: string;
+        active: boolean | null;
+      }
+    | {
+        first_name: string;
+        last_name: string;
+        active: boolean | null;
+      }[]
+    | null;
+}
+
+interface RankingAccumulator {
+  participantId: string;
+  firstName: string;
+  lastName: string;
+  totalPoints: number;
+  testsTaken: number;
+  gradeSum: number;
 }
 
 function requireEnvironmentVariable(name: string) {
@@ -84,6 +106,16 @@ function getTest(
   }
 
   return value;
+}
+
+function getParticipant(
+  value: AttemptRow["participants"]
+) {
+  if (Array.isArray(value)) {
+    return value[0] ?? null;
+  }
+
+  return value ?? null;
 }
 
 function calculateGrade(
@@ -193,6 +225,7 @@ export async function GET(request: Request) {
     const [
       attemptsResult,
       testsResult,
+      rankingAttemptsResult,
     ] = await Promise.all([
       adminClient
         .from("attempts")
@@ -225,6 +258,20 @@ export async function GET(request: Request) {
           count: "exact",
           head: true,
         }),
+
+      adminClient
+        .from("attempts")
+        .select(`
+          participant_id,
+          score,
+          total_questions,
+          created_at,
+          participants (
+            first_name,
+            last_name,
+            active
+          )
+        `),
     ]);
 
     if (
@@ -241,8 +288,20 @@ export async function GET(request: Request) {
       );
     }
 
+    if (
+      rankingAttemptsResult.error
+    ) {
+      throw new Error(
+        rankingAttemptsResult.error.message
+      );
+    }
+
     const attempts =
       (attemptsResult.data ??
+        []) as AttemptRow[];
+
+    const rankingAttempts =
+      (rankingAttemptsResult.data ??
         []) as AttemptRow[];
 
     const grades =
@@ -328,6 +387,150 @@ export async function GET(request: Request) {
         }
       );
 
+    /*
+     * Construim clasamentul intern,
+     * doar pentru calculul poziției.
+     * Nu îl trimitem către arbitru.
+     */
+    const rankingMap = new Map<
+      string,
+      RankingAccumulator
+    >();
+
+    for (const attempt of rankingAttempts) {
+      const rankingParticipant =
+        getParticipant(
+          attempt.participants
+        );
+
+      if (
+        !rankingParticipant ||
+        rankingParticipant.active !== true ||
+        !attempt.participant_id
+      ) {
+        continue;
+      }
+
+      const grade = calculateGrade(
+        attempt.score,
+        attempt.total_questions
+      );
+
+      const existing =
+        rankingMap.get(
+          attempt.participant_id
+        );
+
+      if (existing) {
+        existing.totalPoints +=
+          attempt.score;
+
+        existing.testsTaken += 1;
+
+        existing.gradeSum += grade;
+
+        continue;
+      }
+
+      rankingMap.set(
+        attempt.participant_id,
+        {
+          participantId:
+            attempt.participant_id,
+
+          firstName:
+            rankingParticipant.first_name,
+
+          lastName:
+            rankingParticipant.last_name,
+
+          totalPoints:
+            attempt.score,
+
+          testsTaken: 1,
+
+          gradeSum: grade,
+        }
+      );
+    }
+
+    const ranking = Array.from(
+      rankingMap.values()
+    )
+      .map(
+        (rankingParticipant) => ({
+          participantId:
+            rankingParticipant.participantId,
+
+          fullName:
+            `${rankingParticipant.lastName} ${rankingParticipant.firstName}`.trim(),
+
+          totalPoints:
+            rankingParticipant.totalPoints,
+
+          testsTaken:
+            rankingParticipant.testsTaken,
+
+          averageGrade:
+            rankingParticipant.testsTaken >
+            0
+              ? rankingParticipant.gradeSum /
+                rankingParticipant.testsTaken
+              : 0,
+        })
+      )
+      .sort((first, second) => {
+        if (
+          second.totalPoints !==
+          first.totalPoints
+        ) {
+          return (
+            second.totalPoints -
+            first.totalPoints
+          );
+        }
+
+        if (
+          second.averageGrade !==
+          first.averageGrade
+        ) {
+          return (
+            second.averageGrade -
+            first.averageGrade
+          );
+        }
+
+        if (
+          second.testsTaken !==
+          first.testsTaken
+        ) {
+          return (
+            second.testsTaken -
+            first.testsTaken
+          );
+        }
+
+        return first.fullName.localeCompare(
+          second.fullName,
+          "ro"
+        );
+      });
+
+    const rankingIndex =
+      ranking.findIndex(
+        (rankingParticipant) =>
+          rankingParticipant.participantId ===
+          participant.id
+      );
+
+    const rankingPosition =
+      rankingIndex >= 0
+        ? rankingIndex + 1
+        : null;
+
+    const totalRankedParticipants =
+      ranking.length;
+
     return Response.json({
       participant: {
         id:
@@ -361,6 +564,10 @@ export async function GET(request: Request) {
         averageGrade,
 
         participationPercentage,
+
+        rankingPosition,
+
+        totalRankedParticipants,
       },
 
       history,

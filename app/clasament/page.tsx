@@ -1,14 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import {
-  useEffect,
-  useState,
-} from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 import Navbar from "@/components/Navbar";
+import { supabase } from "@/lib/supabase/client";
 
-interface RankingEntry {
+interface RankingItem {
   rank: number;
   participantId: string;
   firstName: string;
@@ -23,43 +22,82 @@ interface RankingEntry {
   latestAttemptAt: string;
 }
 
-interface RankingStats {
-  publishedTests: number;
-  activeParticipants: number;
-  participantsWithResults: number;
-  totalAttempts: number;
-  generalAverageGrade: number;
-}
-
 interface RankingResponse {
-  ranking: RankingEntry[];
-  stats: RankingStats;
+  ranking: RankingItem[];
+
+  stats: {
+    publishedTests: number;
+    activeParticipants: number;
+    participantsWithResults: number;
+    totalAttempts: number;
+    generalAverageGrade: number;
+  };
 }
 
 export default function RankingPage() {
+  const router = useRouter();
+
   const [data, setData] =
     useState<RankingResponse | null>(null);
 
   const [isLoading, setIsLoading] =
     useState(true);
 
-  const [error, setError] = useState("");
+  const [error, setError] =
+    useState("");
 
   useEffect(() => {
     async function loadRanking() {
       try {
+        const {
+          data: { session },
+          error: sessionError,
+        } = await supabase.auth.getSession();
+
+        if (
+          sessionError ||
+          !session?.access_token
+        ) {
+          router.replace(
+            "/login?next=/clasament"
+          );
+
+          return;
+        }
+
         const response = await fetch(
           "/api/clasament",
           {
+            headers: {
+              Authorization: `Bearer ${session.access_token}`,
+            },
             cache: "no-store",
           }
         );
 
-        const result = (await response.json()) as
-          | RankingResponse
-          | { error: string };
+        const result =
+          (await response.json()) as
+            | RankingResponse
+            | { error: string };
 
-        if (!response.ok || "error" in result) {
+        if (
+          !response.ok ||
+          "error" in result
+        ) {
+          if (response.status === 401) {
+            router.replace(
+              "/login?next=/clasament"
+            );
+
+            return;
+          }
+
+          if (response.status === 403) {
+            throw new Error(
+              "Clasamentul general este disponibil doar administratorului."
+            );
+          }
+
           throw new Error(
             "error" in result
               ? result.error
@@ -80,7 +118,7 @@ export default function RankingPage() {
     }
 
     loadRanking();
-  }, []);
+  }, [router]);
 
   return (
     <div className="min-h-screen bg-[#07100b]">
@@ -100,60 +138,75 @@ export default function RankingPage() {
         <Navbar />
 
         <main className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <h1 className="text-sm font-semibold uppercase tracking-[0.16em] text-green-400">
-                Clasament general
-              </h1>
-
-              <p className="mt-3 max-w-2xl text-gray-300">
-                Punctele obținute la toate testele
-                publicate se adună pe parcursul
-                sezonului.
-              </p>
-            </div>
-
-            <Link
-              href="/"
-              className="inline-flex items-center justify-center rounded-xl border border-white/20 bg-black/40 px-5 py-3 font-semibold text-white backdrop-blur-md transition hover:bg-white/10"
-            >
-              Înapoi la homepage
-            </Link>
-          </div>
-
           {isLoading ? (
-            <div className="mt-10 rounded-2xl border border-white/15 bg-white/95 p-10 text-center shadow-sm backdrop-blur-sm">
+            <div className="rounded-2xl border border-white/15 bg-white/95 p-10 text-center shadow-sm backdrop-blur-sm">
               <p className="text-gray-600">
                 Se încarcă clasamentul...
               </p>
             </div>
           ) : error ? (
-            <div className="mt-10 rounded-2xl border border-red-200 bg-red-50 p-8 text-center">
-              <h2 className="text-xl font-bold text-red-800">
+            <div className="rounded-2xl border border-red-200 bg-red-50 p-8 text-center">
+              <h1 className="text-xl font-bold text-red-800">
                 Clasamentul nu este disponibil
-              </h2>
+              </h1>
 
               <p className="mt-2 text-red-700">
                 {error}
               </p>
+
+              <Link
+                href="/"
+                className="mt-6 inline-flex rounded-xl bg-gray-900 px-5 py-3 font-semibold text-white transition hover:bg-black"
+              >
+                Înapoi la homepage
+              </Link>
             </div>
           ) : data ? (
             <>
+              <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p className="text-sm font-semibold uppercase tracking-[0.16em] text-green-400">
+                    Administrare
+                  </p>
+
+                  <h1 className="mt-2 text-3xl font-bold text-white sm:text-4xl">
+                    Clasament general
+                  </h1>
+
+                  <p className="mt-2 max-w-2xl text-gray-300">
+                    Clasamentul cumulat al
+                    arbitrilor pentru toate
+                    testele publicate.
+                  </p>
+                </div>
+
+                <Link
+                  href="/admin"
+                  className="inline-flex items-center justify-center rounded-xl border border-white/20 bg-black/40 px-5 py-3 font-semibold text-white backdrop-blur-md transition hover:bg-white/10"
+                >
+                  Administrare
+                </Link>
+              </div>
+
               <section className="mt-10 grid grid-cols-2 gap-4 lg:grid-cols-4">
                 <StatCard
                   label="Teste publicate"
-                  value={data.stats.publishedTests}
-                />
-
-                <StatCard
-                  label="Participanți activi"
                   value={
-                    data.stats.activeParticipants
+                    data.stats
+                      .publishedTests
                   }
                 />
 
                 <StatCard
-                  label="Au obținut puncte"
+                  label="Arbitri activi"
+                  value={
+                    data.stats
+                      .activeParticipants
+                  }
+                />
+
+                <StatCard
+                  label="Cu rezultate"
                   value={
                     data.stats
                       .participantsWithResults
@@ -163,47 +216,45 @@ export default function RankingPage() {
                 <StatCard
                   label="Media generală"
                   value={formatGrade(
-                    data.stats.generalAverageGrade
+                    data.stats
+                      .generalAverageGrade
                   )}
                 />
               </section>
 
-              {data.ranking.length === 0 ? (
-                <div className="mt-8 rounded-2xl border border-dashed border-white/20 bg-white/95 p-10 text-center backdrop-blur-sm">
-                  <h2 className="text-xl font-bold text-gray-900">
-                    Nu există încă rezultate
+              <section className="mt-8 overflow-hidden rounded-2xl border border-white/15 bg-white/95 shadow-sm backdrop-blur-sm">
+                <div className="border-b border-gray-200 px-5 py-5 sm:px-6">
+                  <h2 className="text-lg font-bold text-gray-900">
+                    Clasament general
                   </h2>
 
-                  <p className="mt-2 text-gray-600">
-                    Clasamentul va apărea după
-                    susținerea primelor teste.
+                  <p className="mt-1 text-sm text-gray-500">
+                    Ordinea este stabilită
+                    după punctele totale
+                    acumulate.
                   </p>
                 </div>
-              ) : (
-                <>
-                  <section className="mt-8 grid gap-4 md:grid-cols-3">
-                    {data.ranking
-                      .slice(0, 3)
-                      .map((entry) => (
-                        <PodiumCard
-                          key={entry.participantId}
-                          entry={entry}
-                        />
-                      ))}
-                  </section>
 
-                  <section className="mt-8 overflow-hidden rounded-2xl border border-white/15 bg-white/95 shadow-sm backdrop-blur-sm">
-                    <div className="border-b border-gray-200 px-5 py-5 sm:px-6">
-                      <h2 className="text-lg font-bold text-gray-900">
-                        Clasament complet
-                      </h2>
-                    </div>
+                {data.ranking.length === 0 ? (
+                  <div className="p-10 text-center">
+                    <h3 className="text-lg font-bold text-gray-900">
+                      Nu există încă rezultate
+                    </h3>
 
-                    <div className="overflow-x-auto">
-                      <table className="w-full min-w-[860px] text-left">
+                    <p className="mt-2 text-gray-600">
+                      Clasamentul va fi
+                      generat după primele
+                      teste susținute.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    {/* DESKTOP */}
+                    <div className="hidden overflow-x-auto md:block">
+                      <table className="w-full min-w-[900px] text-left">
                         <thead className="bg-gray-50 text-sm text-gray-500">
                           <tr>
-                            <th className="px-5 py-4 font-semibold sm:px-6">
+                            <th className="px-5 py-4 text-center font-semibold">
                               Loc
                             </th>
 
@@ -216,82 +267,78 @@ export default function RankingPage() {
                             </th>
 
                             <th className="px-5 py-4 text-center font-semibold">
-                              Maximum
-                            </th>
-
-                            <th className="px-5 py-4 text-center font-semibold">
                               Teste
                             </th>
 
                             <th className="px-5 py-4 text-center font-semibold">
-                              Participare
+                              Media
                             </th>
 
                             <th className="px-5 py-4 text-center font-semibold">
-                              Medie notă
+                              Participare
                             </th>
                           </tr>
                         </thead>
 
                         <tbody className="divide-y divide-gray-100">
                           {data.ranking.map(
-                            (entry) => (
+                            (participant) => (
                               <tr
                                 key={
-                                  entry.participantId
+                                  participant.participantId
                                 }
                                 className="transition hover:bg-gray-50"
                               >
-                                <td className="px-5 py-4 sm:px-6">
-                                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 font-bold text-gray-700">
-                                    {entry.rank}
-                                  </span>
+                                <td className="px-5 py-4 text-center">
+                                  <RankBadge
+                                    rank={
+                                      participant.rank
+                                    }
+                                  />
                                 </td>
 
                                 <td className="px-5 py-4">
                                   <Link
-                                    href={`/clasament/${entry.participantId}`}
-                                    className="font-semibold text-gray-900 transition hover:text-green-700 hover:underline"
+                                    href={`/clasament/${participant.participantId}`}
+                                    className="font-bold text-gray-900 transition hover:text-green-700"
                                   >
-                                    {entry.fullName}
+                                    {
+                                      participant.fullName
+                                    }
                                   </Link>
                                 </td>
 
-                                <td className="px-5 py-4 text-center text-lg font-bold text-green-700">
-                                  {entry.totalPoints}
-                                </td>
-
-                                <td className="px-5 py-4 text-center text-gray-700">
+                                <td className="px-5 py-4 text-center font-bold text-green-700">
                                   {
-                                    entry.maximumPoints
+                                    participant.totalPoints
+                                  }
+                                  /
+                                  {
+                                    participant.maximumPoints
                                   }
                                 </td>
 
-                                <td className="px-5 py-4 text-center text-gray-700">
-                                  {entry.testsTaken}
-                                </td>
-
-                                <td className="px-5 py-4 text-center text-gray-700">
-                                  <span className="font-semibold text-gray-900">
-                                    {entry.testsTaken}/
-                                    {
-                                      entry.publishedTests
-                                    }
-                                  </span>
-
-                                  <span className="ml-2 text-sm text-gray-500">
-                                    (
-                                    {Math.round(
-                                      entry.participationPercentage
-                                    )}
-                                    %)
-                                  </span>
+                                <td className="px-5 py-4 text-center font-semibold text-gray-900">
+                                  {
+                                    participant.testsTaken
+                                  }
+                                  /
+                                  {
+                                    participant.publishedTests
+                                  }
                                 </td>
 
                                 <td className="px-5 py-4 text-center font-semibold text-gray-900">
                                   {formatGrade(
-                                    entry.averageGrade
+                                    participant.averageGrade
                                   )}
+                                </td>
+
+                                <td className="px-5 py-4 text-center text-gray-700">
+                                  {Math.round(
+                                    participant.participationPercentage
+                                  )}
+                                  %
                                 </td>
                               </tr>
                             )
@@ -299,9 +346,83 @@ export default function RankingPage() {
                         </tbody>
                       </table>
                     </div>
-                  </section>
-                </>
-              )}
+
+                    {/* MOBILE */}
+                    <div className="divide-y divide-gray-200 md:hidden">
+                      {data.ranking.map(
+                        (participant) => (
+                          <article
+                            key={
+                              participant.participantId
+                            }
+                            className="p-5"
+                          >
+                            <div className="flex items-center gap-4">
+                              <RankBadge
+                                rank={
+                                  participant.rank
+                                }
+                              />
+
+                              <div className="min-w-0 flex-1">
+                                <Link
+                                  href={`/clasament/${participant.participantId}`}
+                                  className="font-bold text-gray-900 transition hover:text-green-700"
+                                >
+                                  {
+                                    participant.fullName
+                                  }
+                                </Link>
+
+                                <p className="mt-1 text-sm text-gray-500">
+                                  {
+                                    participant.testsTaken
+                                  }
+                                  /
+                                  {
+                                    participant.publishedTests
+                                  }{" "}
+                                  teste
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="mt-4 grid grid-cols-3 gap-3">
+                              <MiniStat
+                                label="Puncte"
+                                value={`${participant.totalPoints}/${participant.maximumPoints}`}
+                              />
+
+                              <MiniStat
+                                label="Media"
+                                value={formatGrade(
+                                  participant.averageGrade
+                                )}
+                              />
+
+                              <MiniStat
+                                label="Participare"
+                                value={`${Math.round(
+                                  participant.participationPercentage
+                                )}%`}
+                              />
+                            </div>
+                          </article>
+                        )
+                      )}
+                    </div>
+                  </>
+                )}
+              </section>
+
+              <div className="mt-8 flex justify-center">
+                <Link
+                  href="/admin"
+                  className="inline-flex items-center justify-center rounded-xl bg-green-600 px-6 py-3 font-semibold text-white transition hover:bg-green-700"
+                >
+                  Înapoi la administrare
+                </Link>
+              </div>
             </>
           ) : null}
         </main>
@@ -310,16 +431,9 @@ export default function RankingPage() {
   );
 }
 
-function formatGrade(value: number) {
-  return value.toLocaleString("ro-RO", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
-
 interface StatCardProps {
   label: string;
-  value: number | string;
+  value: string | number;
 }
 
 function StatCard({
@@ -339,62 +453,67 @@ function StatCard({
   );
 }
 
-interface PodiumCardProps {
-  entry: RankingEntry;
+interface MiniStatProps {
+  label: string;
+  value: string;
 }
 
-function PodiumCard({
-  entry,
-}: PodiumCardProps) {
-  const positionLabel =
-    entry.rank === 1
-      ? "Locul 1"
-      : entry.rank === 2
-        ? "Locul 2"
-        : "Locul 3";
+function MiniStat({
+  label,
+  value,
+}: MiniStatProps) {
+  return (
+    <div className="rounded-xl bg-gray-50 p-3 text-center">
+      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+        {label}
+      </p>
+
+      <p className="mt-1 font-bold text-gray-900">
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function RankBadge({
+  rank,
+}: {
+  rank: number;
+}) {
+  if (rank === 1) {
+    return (
+      <span className="inline-flex h-10 min-w-10 items-center justify-center rounded-full bg-yellow-100 px-3 font-bold text-yellow-800">
+        1
+      </span>
+    );
+  }
+
+  if (rank === 2) {
+    return (
+      <span className="inline-flex h-10 min-w-10 items-center justify-center rounded-full bg-gray-200 px-3 font-bold text-gray-700">
+        2
+      </span>
+    );
+  }
+
+  if (rank === 3) {
+    return (
+      <span className="inline-flex h-10 min-w-10 items-center justify-center rounded-full bg-orange-100 px-3 font-bold text-orange-800">
+        3
+      </span>
+    );
+  }
 
   return (
-    <article className="rounded-2xl border border-white/15 bg-white/95 p-6 text-center shadow-sm backdrop-blur-sm">
-      <p className="text-sm font-bold uppercase tracking-[0.14em] text-green-700">
-        {positionLabel}
-      </p>
-
-      <Link
-        href={`/clasament/${entry.participantId}`}
-        className="mt-3 block text-xl font-bold text-gray-900 transition hover:text-green-700 hover:underline"
-      >
-        {entry.fullName}
-      </Link>
-
-      <p className="mt-5 text-4xl font-bold text-green-700">
-        {entry.totalPoints}
-      </p>
-
-      <p className="mt-1 text-sm text-gray-500">
-        puncte din {entry.maximumPoints}
-      </p>
-
-      <div className="mt-5 flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm text-gray-600">
-        <span>
-          {entry.testsTaken}{" "}
-          {entry.testsTaken === 1
-            ? "test"
-            : "teste"}
-        </span>
-
-        <span>
-          {Math.round(
-            entry.participationPercentage
-          )}
-          % participare
-        </span>
-
-        <span>
-          media {formatGrade(
-            entry.averageGrade
-          )}
-        </span>
-      </div>
-    </article>
+    <span className="inline-flex h-10 min-w-10 items-center justify-center rounded-full bg-gray-100 px-3 font-bold text-gray-700">
+      {rank}
+    </span>
   );
+}
+
+function formatGrade(value: number) {
+  return value.toLocaleString("ro-RO", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }

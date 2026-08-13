@@ -63,11 +63,16 @@ function calculateGrade(
   return (score / totalQuestions) * 10;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const supabaseUrl =
       requireEnvironmentVariable(
         "NEXT_PUBLIC_SUPABASE_URL"
+      );
+
+    const publishableKey =
+      requireEnvironmentVariable(
+        "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"
       );
 
     const secretKey =
@@ -75,6 +80,83 @@ export async function GET() {
         "SUPABASE_SECRET_KEY"
       );
 
+    const adminEmail =
+      requireEnvironmentVariable(
+        "ADMIN_EMAIL"
+      )
+        .trim()
+        .toLowerCase();
+
+    /*
+     * 1. Verificăm autentificarea
+     */
+    const authorization =
+      request.headers.get("authorization") ?? "";
+
+    const accessToken =
+      authorization.startsWith("Bearer ")
+        ? authorization.slice(7)
+        : "";
+
+    if (!accessToken) {
+      return Response.json(
+        {
+          error:
+            "Trebuie să fii autentificat.",
+        },
+        { status: 401 }
+      );
+    }
+
+    const authClient = createClient(
+      supabaseUrl,
+      publishableKey,
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+          detectSessionInUrl: false,
+        },
+      }
+    );
+
+    const {
+      data: { user },
+      error: userError,
+    } = await authClient.auth.getUser(
+      accessToken
+    );
+
+    if (userError || !user) {
+      return Response.json(
+        {
+          error:
+            "Sesiunea nu este validă.",
+        },
+        { status: 401 }
+      );
+    }
+
+    /*
+     * 2. Verificăm dacă este administratorul
+     */
+    if (
+      user.email
+        ?.trim()
+        .toLowerCase() !== adminEmail
+    ) {
+      return Response.json(
+        {
+          error:
+            "Nu ai permisiunea să vezi clasamentul general.",
+        },
+        { status: 403 }
+      );
+    }
+
+    /*
+     * 3. Client admin Supabase
+     */
     const adminClient = createClient(
       supabaseUrl,
       secretKey,
@@ -87,6 +169,9 @@ export async function GET() {
       }
     );
 
+    /*
+     * 4. Încărcăm datele
+     */
     const [
       attemptsResult,
       testsResult,
@@ -151,12 +236,23 @@ export async function GET() {
 
     let totalGrades = 0;
 
+    /*
+     * 5. Construim clasamentul
+     */
     for (const attempt of attempts) {
       const participant = getParticipant(
         attempt.participants
       );
 
       if (!participant) {
+        continue;
+      }
+
+      /*
+       * Nu includem participanții inactivi
+       * în clasamentul general.
+       */
+      if (participant.active !== true) {
         continue;
       }
 
@@ -226,6 +322,14 @@ export async function GET() {
       );
     }
 
+    /*
+     * 6. Sortare clasament
+     *
+     * 1. Puncte totale
+     * 2. Media notelor
+     * 3. Număr teste
+     * 4. Nume
+     */
     const ranking = Array.from(
       rankingMap.values()
     )
@@ -314,11 +418,21 @@ export async function GET() {
     const generalAverageGrade =
       attempts.length > 0
         ? totalGrades /
-          attempts.length
+          attempts.filter((attempt) => {
+            const participant =
+              getParticipant(
+                attempt.participants
+              );
+
+            return (
+              participant?.active === true
+            );
+          }).length
         : 0;
 
     return Response.json({
       ranking,
+
       stats: {
         publishedTests:
           testsResult.count ?? 0,
@@ -332,7 +446,12 @@ export async function GET() {
         totalAttempts:
           attempts.length,
 
-        generalAverageGrade,
+        generalAverageGrade:
+          Number.isFinite(
+            generalAverageGrade
+          )
+            ? generalAverageGrade
+            : 0,
       },
     });
   } catch (error) {
