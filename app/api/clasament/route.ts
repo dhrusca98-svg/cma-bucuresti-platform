@@ -34,17 +34,13 @@ function requireEnvironmentVariable(name: string) {
   const value = process.env[name];
 
   if (!value) {
-    throw new Error(
-      `Lipsește variabila de mediu ${name}.`
-    );
+    throw new Error(`Lipsește variabila de mediu ${name}.`);
   }
 
   return value;
 }
 
-function getParticipant(
-  value: AttemptRow["participants"]
-) {
+function getParticipant(value: AttemptRow["participants"]) {
   if (Array.isArray(value)) {
     return value[0] ?? null;
   }
@@ -52,10 +48,7 @@ function getParticipant(
   return value;
 }
 
-function calculateGrade(
-  score: number,
-  totalQuestions: number
-) {
+function calculateGrade(score: number, totalQuestions: number) {
   if (totalQuestions <= 0) {
     return 0;
   }
@@ -65,45 +58,31 @@ function calculateGrade(
 
 export async function GET(request: Request) {
   try {
-    const supabaseUrl =
-      requireEnvironmentVariable(
-        "NEXT_PUBLIC_SUPABASE_URL"
-      );
+    const supabaseUrl = requireEnvironmentVariable(
+      "NEXT_PUBLIC_SUPABASE_URL"
+    );
+    const publishableKey = requireEnvironmentVariable(
+      "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"
+    );
+    const secretKey = requireEnvironmentVariable(
+      "SUPABASE_SECRET_KEY"
+    );
+    const adminEmail = requireEnvironmentVariable(
+      "ADMIN_EMAIL"
+    )
+      .trim()
+      .toLowerCase();
 
-    const publishableKey =
-      requireEnvironmentVariable(
-        "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"
-      );
-
-    const secretKey =
-      requireEnvironmentVariable(
-        "SUPABASE_SECRET_KEY"
-      );
-
-    const adminEmail =
-      requireEnvironmentVariable(
-        "ADMIN_EMAIL"
-      )
-        .trim()
-        .toLowerCase();
-
-    /*
-     * 1. Verificăm autentificarea
-     */
     const authorization =
       request.headers.get("authorization") ?? "";
 
-    const accessToken =
-      authorization.startsWith("Bearer ")
-        ? authorization.slice(7)
-        : "";
+    const accessToken = authorization.startsWith("Bearer ")
+      ? authorization.slice(7)
+      : "";
 
     if (!accessToken) {
       return Response.json(
-        {
-          error:
-            "Trebuie să fii autentificat.",
-        },
+        { error: "Trebuie să fii autentificat." },
         { status: 401 }
       );
     }
@@ -123,27 +102,17 @@ export async function GET(request: Request) {
     const {
       data: { user },
       error: userError,
-    } = await authClient.auth.getUser(
-      accessToken
-    );
+    } = await authClient.auth.getUser(accessToken);
 
     if (userError || !user) {
       return Response.json(
-        {
-          error:
-            "Sesiunea nu este validă.",
-        },
+        { error: "Sesiunea nu este validă." },
         { status: 401 }
       );
     }
 
-    /*
-     * 2. Verificăm dacă este administratorul
-     */
     if (
-      user.email
-        ?.trim()
-        .toLowerCase() !== adminEmail
+      user.email?.trim().toLowerCase() !== adminEmail
     ) {
       return Response.json(
         {
@@ -154,9 +123,6 @@ export async function GET(request: Request) {
       );
     }
 
-    /*
-     * 3. Client admin Supabase
-     */
     const adminClient = createClient(
       supabaseUrl,
       secretKey,
@@ -169,9 +135,6 @@ export async function GET(request: Request) {
       }
     );
 
-    /*
-     * 4. Încărcăm datele
-     */
     const [
       attemptsResult,
       testsResult,
@@ -189,7 +152,8 @@ export async function GET(request: Request) {
             last_name,
             active
           )
-        `),
+        `)
+        .eq("status", "completed"),
 
       adminClient
         .from("tests")
@@ -208,26 +172,19 @@ export async function GET(request: Request) {
     ]);
 
     if (attemptsResult.error) {
-      throw new Error(
-        attemptsResult.error.message
-      );
+      throw new Error(attemptsResult.error.message);
     }
 
     if (testsResult.error) {
-      throw new Error(
-        testsResult.error.message
-      );
+      throw new Error(testsResult.error.message);
     }
 
     if (participantsResult.error) {
-      throw new Error(
-        participantsResult.error.message
-      );
+      throw new Error(participantsResult.error.message);
     }
 
     const attempts =
-      (attemptsResult.data ??
-        []) as AttemptRow[];
+      (attemptsResult.data ?? []) as AttemptRow[];
 
     const rankingMap = new Map<
       string,
@@ -235,24 +192,14 @@ export async function GET(request: Request) {
     >();
 
     let totalGrades = 0;
+    let completedAttemptsFromActiveParticipants = 0;
 
-    /*
-     * 5. Construim clasamentul
-     */
     for (const attempt of attempts) {
       const participant = getParticipant(
         attempt.participants
       );
 
-      if (!participant) {
-        continue;
-      }
-
-      /*
-       * Nu includem participanții inactivi
-       * în clasamentul general.
-       */
-      if (participant.active !== true) {
+      if (!participant || participant.active !== true) {
         continue;
       }
 
@@ -262,30 +209,22 @@ export async function GET(request: Request) {
       );
 
       totalGrades += grade;
+      completedAttemptsFromActiveParticipants += 1;
 
-      const existing =
-        rankingMap.get(
-          attempt.participant_id
-        );
+      const existing = rankingMap.get(
+        attempt.participant_id
+      );
 
       if (existing) {
-        existing.totalPoints +=
-          attempt.score;
-
+        existing.totalPoints += attempt.score;
         existing.maximumPoints +=
           attempt.total_questions;
-
         existing.testsTaken += 1;
-
         existing.gradeSum += grade;
 
         if (
-          new Date(
-            attempt.created_at
-          ).getTime() >
-          new Date(
-            existing.latestAttemptAt
-          ).getTime()
+          new Date(attempt.created_at).getTime() >
+          new Date(existing.latestAttemptAt).getTime()
         ) {
           existing.latestAttemptAt =
             attempt.created_at;
@@ -294,114 +233,66 @@ export async function GET(request: Request) {
         continue;
       }
 
-      rankingMap.set(
-        attempt.participant_id,
-        {
-          participantId:
-            attempt.participant_id,
-
-          firstName:
-            participant.first_name,
-
-          lastName:
-            participant.last_name,
-
-          totalPoints:
-            attempt.score,
-
-          maximumPoints:
-            attempt.total_questions,
-
-          testsTaken: 1,
-
-          gradeSum: grade,
-
-          latestAttemptAt:
-            attempt.created_at,
-        }
-      );
+      rankingMap.set(attempt.participant_id, {
+        participantId: attempt.participant_id,
+        firstName: participant.first_name,
+        lastName: participant.last_name,
+        totalPoints: attempt.score,
+        maximumPoints: attempt.total_questions,
+        testsTaken: 1,
+        gradeSum: grade,
+        latestAttemptAt: attempt.created_at,
+      });
     }
 
-    /*
-     * 6. Sortare clasament
-     *
-     * 1. Puncte totale
-     * 2. Media notelor
-     * 3. Număr teste
-     * 4. Nume
-     */
     const ranking = Array.from(
       rankingMap.values()
     )
       .map((participant) => ({
-        participantId:
-          participant.participantId,
-
-        firstName:
-          participant.firstName,
-
-        lastName:
-          participant.lastName,
-
+        participantId: participant.participantId,
+        firstName: participant.firstName,
+        lastName: participant.lastName,
         fullName:
           `${participant.lastName} ${participant.firstName}`.trim(),
-
-        totalPoints:
-          participant.totalPoints,
-
-        maximumPoints:
-          participant.maximumPoints,
-
-        testsTaken:
-          participant.testsTaken,
-
-        publishedTests:
-          testsResult.count ?? 0,
-
+        totalPoints: participant.totalPoints,
+        maximumPoints: participant.maximumPoints,
+        testsTaken: participant.testsTaken,
+        publishedTests: testsResult.count ?? 0,
         participationPercentage:
           (testsResult.count ?? 0) > 0
             ? (participant.testsTaken /
                 (testsResult.count ?? 1)) *
               100
             : 0,
-
         averageGrade:
           participant.testsTaken > 0
             ? participant.gradeSum /
               participant.testsTaken
             : 0,
-
-        latestAttemptAt:
-          participant.latestAttemptAt,
+        latestAttemptAt: participant.latestAttemptAt,
       }))
       .sort((first, second) => {
         if (
-          second.totalPoints !==
-          first.totalPoints
+          second.totalPoints !== first.totalPoints
         ) {
           return (
-            second.totalPoints -
-            first.totalPoints
+            second.totalPoints - first.totalPoints
           );
         }
 
         if (
-          second.averageGrade !==
-          first.averageGrade
+          second.averageGrade !== first.averageGrade
         ) {
           return (
-            second.averageGrade -
-            first.averageGrade
+            second.averageGrade - first.averageGrade
           );
         }
 
         if (
-          second.testsTaken !==
-          first.testsTaken
+          second.testsTaken !== first.testsTaken
         ) {
           return (
-            second.testsTaken -
-            first.testsTaken
+            second.testsTaken - first.testsTaken
           );
         }
 
@@ -416,42 +307,21 @@ export async function GET(request: Request) {
       }));
 
     const generalAverageGrade =
-      attempts.length > 0
+      completedAttemptsFromActiveParticipants > 0
         ? totalGrades /
-          attempts.filter((attempt) => {
-            const participant =
-              getParticipant(
-                attempt.participants
-              );
-
-            return (
-              participant?.active === true
-            );
-          }).length
+          completedAttemptsFromActiveParticipants
         : 0;
 
     return Response.json({
       ranking,
-
       stats: {
-        publishedTests:
-          testsResult.count ?? 0,
-
+        publishedTests: testsResult.count ?? 0,
         activeParticipants:
           participantsResult.count ?? 0,
-
-        participantsWithResults:
-          ranking.length,
-
+        participantsWithResults: ranking.length,
         totalAttempts:
-          attempts.length,
-
-        generalAverageGrade:
-          Number.isFinite(
-            generalAverageGrade
-          )
-            ? generalAverageGrade
-            : 0,
+          completedAttemptsFromActiveParticipants,
+        generalAverageGrade,
       },
     });
   } catch (error) {

@@ -245,6 +245,10 @@ export async function GET(request: Request) {
           "participant_id",
           participant.id
         )
+        .eq(
+          "status",
+          "completed"
+        )
         .order(
           "created_at",
           {
@@ -271,7 +275,11 @@ export async function GET(request: Request) {
             last_name,
             active
           )
-        `),
+        `)
+        .eq(
+          "status",
+          "completed"
+        ),
     ]);
 
     if (

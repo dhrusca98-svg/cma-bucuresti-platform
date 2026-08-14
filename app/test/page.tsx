@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-
 import {
   useCallback,
   useEffect,
@@ -26,10 +25,9 @@ interface TestQuestion {
 }
 
 interface ActiveTest {
-  id?: string;
+  id: string;
   title: string;
-  timePerQuestion: number;
-  updatedAt?: string;
+  durationMinutes: number;
   questions: TestQuestion[];
 }
 
@@ -45,6 +43,24 @@ interface ExistingAttempt {
   percentage: number;
   durationSeconds: number | null;
   createdAt: string;
+  startedAt?: string;
+}
+
+interface ProgressResponse {
+  success?: boolean;
+  attempted?: boolean;
+  isAdmin?: boolean;
+  status?: "in_progress" | "completed" | "preview";
+  expired?: boolean;
+  attemptId?: string;
+  startedAt?: string;
+  durationSeconds?: number;
+  timeLeft?: number;
+  score?: number;
+  answers?: RecordedAnswer[];
+  attempt?: ExistingAttempt;
+  completed?: boolean;
+  error?: string;
 }
 
 const backgroundStyle = {
@@ -56,34 +72,123 @@ export default function TestPage() {
 
   const [activeTest, setActiveTest] =
     useState<ActiveTest | null>(null);
-
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
-
   const [existingAttempt, setExistingAttempt] =
     useState<ExistingAttempt | null>(null);
-
   const [isAdminPreview, setIsAdminPreview] =
     useState(false);
-
   const [currentQuestionIndex, setCurrentQuestionIndex] =
     useState(0);
-
   const [selectedAnswer, setSelectedAnswer] =
     useState<number | null>(null);
-
   const [isConfirmed, setIsConfirmed] = useState(false);
   const [score, setScore] = useState(0);
   const [isFinished, setIsFinished] = useState(false);
   const [timeLeft, setTimeLeft] = useState(0);
+  const [totalTime, setTotalTime] = useState(30 * 60);
   const [saveError, setSaveError] = useState("");
-  const [isSavingResult, setIsSavingResult] = useState(false);
+  const [isSavingAnswer, setIsSavingAnswer] =
+    useState(false);
+  const [isSavingResult, setIsSavingResult] =
+    useState(false);
+  const [expired, setExpired] = useState(false);
 
-  const confirmedRef = useRef(false);
-  const selectedAnswerRef = useRef<number | null>(null);
   const answersRef = useRef<RecordedAnswer[]>([]);
   const startedAtRef = useRef<number>(Date.now());
-  const resultSavedRef = useRef(false);
+  const finishingRef = useRef(false);
+
+  const question =
+    activeTest?.questions[currentQuestionIndex];
+
+  const isLastQuestion =
+    activeTest !== null &&
+    currentQuestionIndex ===
+      activeTest.questions.length - 1;
+
+  const isCorrect =
+    question !== undefined &&
+    selectedAnswer !== null &&
+    selectedAnswer === question.correctAnswer;
+
+  const applyProgress = useCallback(
+    (
+      test: ActiveTest,
+      progress: ProgressResponse
+    ) => {
+      const durationSeconds =
+        progress.durationSeconds ??
+        test.durationMinutes * 60;
+
+      setTotalTime(durationSeconds);
+
+      if (
+        progress.status === "completed" &&
+        progress.attempt
+      ) {
+        setExistingAttempt(progress.attempt);
+        setExpired(progress.expired === true);
+        return;
+      }
+
+      const savedAnswers = progress.answers ?? [];
+      answersRef.current = savedAnswers;
+      setScore(
+        progress.score ??
+          savedAnswers.filter(
+            (answer) => answer.isCorrect
+          ).length
+      );
+
+      if (progress.startedAt) {
+        startedAtRef.current = new Date(
+          progress.startedAt
+        ).getTime();
+      } else {
+        startedAtRef.current = Date.now();
+      }
+
+      setTimeLeft(
+        progress.timeLeft ?? durationSeconds
+      );
+
+      if (savedAnswers.length === 0) {
+        setCurrentQuestionIndex(0);
+        setSelectedAnswer(null);
+        setIsConfirmed(false);
+        return;
+      }
+
+      const lastAnsweredIndex = Math.max(
+        ...savedAnswers
+          .map((answer) =>
+            test.questions.findIndex(
+              (questionItem) =>
+                questionItem.id === answer.questionId
+            )
+          )
+          .filter((index) => index >= 0)
+      );
+
+      const safeIndex =
+        lastAnsweredIndex >= 0
+          ? lastAnsweredIndex
+          : 0;
+
+      const savedAnswer = savedAnswers.find(
+        (answer) =>
+          answer.questionId ===
+          test.questions[safeIndex]?.id
+      );
+
+      setCurrentQuestionIndex(safeIndex);
+      setSelectedAnswer(
+        savedAnswer?.selectedAnswer ?? null
+      );
+      setIsConfirmed(Boolean(savedAnswer));
+    },
+    []
+  );
 
   useEffect(() => {
     async function loadTest() {
@@ -93,7 +198,10 @@ export default function TestPage() {
           error: sessionError,
         } = await supabase.auth.getSession();
 
-        if (sessionError || !session) {
+        if (
+          sessionError ||
+          !session?.access_token
+        ) {
           router.replace("/login?next=/test");
           return;
         }
@@ -105,7 +213,7 @@ export default function TestPage() {
           .select(`
             id,
             title,
-            time_per_question,
+            duration_minutes,
             available_until,
             created_at,
             questions (
@@ -142,9 +250,14 @@ export default function TestPage() {
         const formattedTest: ActiveTest = {
           id: data.id,
           title: data.title,
-          timePerQuestion: data.time_per_question,
+          durationMinutes: Number(
+            data.duration_minutes ?? 30
+          ),
           questions: [...(data.questions ?? [])]
-            .sort((a: any, b: any) => a.order_number - b.order_number)
+            .sort(
+              (a: any, b: any) =>
+                a.order_number - b.order_number
+            )
             .map((q: any) => ({
               id: q.id,
               question: q.question,
@@ -160,22 +273,26 @@ export default function TestPage() {
             })),
         };
 
+        if (formattedTest.questions.length === 0) {
+          throw new Error(
+            "Testul activ nu conține întrebări."
+          );
+        }
+
+        setActiveTest(formattedTest);
+
         const statusResponse = await fetch(
           `/api/test/submit?testId=${formattedTest.id}`,
           {
             headers: {
               Authorization: `Bearer ${session.access_token}`,
             },
+            cache: "no-store",
           }
         );
 
         const statusResult =
-          (await statusResponse.json()) as {
-            attempted?: boolean;
-            isAdmin?: boolean;
-            attempt?: ExistingAttempt;
-            error?: string;
-          };
+          (await statusResponse.json()) as ProgressResponse;
 
         if (!statusResponse.ok) {
           throw new Error(
@@ -184,21 +301,57 @@ export default function TestPage() {
           );
         }
 
-        setActiveTest(formattedTest);
         setIsAdminPreview(
           statusResult.isAdmin === true
         );
 
         if (
-          statusResult.attempted &&
+          statusResult.status === "completed" &&
           statusResult.attempt
         ) {
           setExistingAttempt(statusResult.attempt);
+          setExpired(statusResult.expired === true);
           return;
         }
 
-        setTimeLeft(formattedTest.timePerQuestion);
-        startedAtRef.current = Date.now();
+        const startResponse = await fetch(
+          "/api/test/submit",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({
+              action: "start",
+              testId: formattedTest.id,
+            }),
+          }
+        );
+
+        const startResult =
+          (await startResponse.json()) as ProgressResponse;
+
+        if (
+          !startResponse.ok &&
+          !startResult.completed
+        ) {
+          throw new Error(
+            startResult.error ||
+              "Testarea nu a putut fi începută."
+          );
+        }
+
+        if (
+          startResult.status === "completed" &&
+          startResult.attempt
+        ) {
+          setExistingAttempt(startResult.attempt);
+          setExpired(startResult.expired === true);
+          return;
+        }
+
+        applyProgress(formattedTest, startResult);
       } catch (error) {
         console.error(
           "Eroare la încărcarea testului:",
@@ -215,72 +368,26 @@ export default function TestPage() {
       }
     }
 
-    loadTest();
-  }, [router]);
+    void loadTest();
+  }, [applyProgress, router]);
 
-  const question =
-    activeTest?.questions[currentQuestionIndex];
-
-  const isLastQuestion =
-    activeTest !== null &&
-    currentQuestionIndex ===
-      activeTest.questions.length - 1;
-
-  const isCorrect =
-    question !== undefined &&
-    selectedAnswer !== null &&
-    selectedAnswer === question.correctAnswer;
-
-  useEffect(() => {
-    selectedAnswerRef.current = selectedAnswer;
-  }, [selectedAnswer]);
-
-  const confirmAnswer = useCallback(
-    (answer: number | null) => {
-      if (!question || confirmedRef.current) return;
-
-      confirmedRef.current = true;
-      setIsConfirmed(true);
-
-      const answerIsCorrect =
-        answer === question.correctAnswer;
-
-      answersRef.current = [
-        ...answersRef.current.filter(
-          (recordedAnswer) =>
-            recordedAnswer.questionId !== question.id
-        ),
-        {
-          questionId: question.id,
-          selectedAnswer: answer,
-          isCorrect: answerIsCorrect,
-        },
-      ];
-
-      if (answerIsCorrect) {
-        setScore((previousScore) => previousScore + 1);
-      }
-    },
-    [question]
-  );
-
-  const handleConfirm = useCallback(() => {
-    if (selectedAnswer === null) return;
-
-    confirmAnswer(selectedAnswer);
-  }, [confirmAnswer, selectedAnswer]);
-
-  const saveResult = useCallback(
-    async (finalScore: number) => {
+  const finishTest = useCallback(
+    async (wasExpired = false) => {
       if (
-        !activeTest?.id ||
-        resultSavedRef.current ||
-        isAdminPreview
+        !activeTest ||
+        finishingRef.current
       ) {
         return;
       }
 
-      resultSavedRef.current = true;
+      if (isAdminPreview) {
+        finishingRef.current = true;
+        setExpired(wasExpired);
+        setIsFinished(true);
+        return;
+      }
+
+      finishingRef.current = true;
       setIsSavingResult(true);
       setSaveError("");
 
@@ -299,13 +406,6 @@ export default function TestPage() {
           );
         }
 
-        const durationSeconds = Math.max(
-          1,
-          Math.round(
-            (Date.now() - startedAtRef.current) / 1000
-          )
-        );
-
         const response = await fetch(
           "/api/test/submit",
           {
@@ -315,19 +415,14 @@ export default function TestPage() {
               Authorization: `Bearer ${session.access_token}`,
             },
             body: JSON.stringify({
+              action: "finish",
               testId: activeTest.id,
-              score: finalScore,
-              totalQuestions:
-                activeTest.questions.length,
-              durationSeconds,
-              answers: answersRef.current,
             }),
           }
         );
 
-        const result = (await response.json()) as {
-          error?: string;
-        };
+        const result =
+          (await response.json()) as ProgressResponse;
 
         if (!response.ok) {
           throw new Error(
@@ -335,8 +430,17 @@ export default function TestPage() {
               "Rezultatul nu a putut fi salvat."
           );
         }
+
+        if (result.attempt) {
+          setScore(result.attempt.score);
+        }
+
+        setExpired(
+          wasExpired || result.expired === true
+        );
+        setIsFinished(true);
       } catch (error) {
-        resultSavedRef.current = false;
+        finishingRef.current = false;
 
         setSaveError(
           error instanceof Error
@@ -350,54 +454,219 @@ export default function TestPage() {
     [activeTest, isAdminPreview]
   );
 
-  const handleNextQuestion = useCallback(() => {
-    if (!activeTest) return;
-
-    if (isLastQuestion) {
-      setIsFinished(true);
-      void saveResult(score);
-      return;
-    }
-
-    confirmedRef.current = false;
-    selectedAnswerRef.current = null;
-
-    setCurrentQuestionIndex(
-      (previousIndex) => previousIndex + 1
-    );
-
-    setSelectedAnswer(null);
-    setIsConfirmed(false);
-    setTimeLeft(activeTest.timePerQuestion);
-  }, [
-    activeTest,
-    isLastQuestion,
-    saveResult,
-    score,
-  ]);
-
-  useEffect(() => {
+  const handleConfirm = useCallback(async () => {
     if (
       !activeTest ||
       !question ||
+      selectedAnswer === null ||
       isConfirmed ||
+      isSavingAnswer ||
       isFinished
     ) {
       return;
     }
 
-    const timer = window.setInterval(() => {
-      setTimeLeft((previousTime) => {
-        if (previousTime <= 1) {
-          window.clearInterval(timer);
+    if (isAdminPreview) {
+      const answerIsCorrect =
+        selectedAnswer === question.correctAnswer;
 
-          confirmAnswer(selectedAnswerRef.current);
+      const newAnswer: RecordedAnswer = {
+        questionId: question.id,
+        selectedAnswer,
+        isCorrect: answerIsCorrect,
+      };
 
-          return 0;
+      answersRef.current = [
+        ...answersRef.current.filter(
+          (answer) =>
+            answer.questionId !== question.id
+        ),
+        newAnswer,
+      ];
+
+      if (answerIsCorrect) {
+        setScore(
+          (previousScore) => previousScore + 1
+        );
+      }
+
+      setIsConfirmed(true);
+      return;
+    }
+
+    setIsSavingAnswer(true);
+    setSaveError("");
+
+    try {
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+
+      if (
+        sessionError ||
+        !session?.access_token
+      ) {
+        throw new Error(
+          "Sesiunea a expirat. Autentifică-te din nou."
+        );
+      }
+
+      const response = await fetch(
+        "/api/test/submit",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            action: "answer",
+            testId: activeTest.id,
+            questionId: question.id,
+            selectedAnswer,
+          }),
         }
+      );
 
-        return previousTime - 1;
-      });
+      const result =
+        (await response.json()) as ProgressResponse & {
+          answer?: RecordedAnswer;
+          alreadyAnswered?: boolean;
+        };
+
+      if (!response.ok) {
+        throw new Error(
+          result.error ||
+            "Răspunsul nu a putut fi salvat."
+        );
+      }
+
+      if (
+        result.status === "completed" &&
+        result.attempt
+      ) {
+        setScore(result.attempt.score);
+        setExpired(result.expired === true);
+        setIsFinished(true);
+        return;
+      }
+
+      if (!result.answer) {
+        throw new Error(
+          "Răspunsul nu a putut fi confirmat."
+        );
+      }
+
+      answersRef.current = [
+        ...answersRef.current.filter(
+          (answer) =>
+            answer.questionId !== question.id
+        ),
+        result.answer,
+      ];
+
+      setSelectedAnswer(
+        result.answer.selectedAnswer
+      );
+      setIsConfirmed(true);
+
+      if (typeof result.score === "number") {
+        setScore(result.score);
+      } else {
+        setScore(
+          answersRef.current.filter(
+            (answer) => answer.isCorrect
+          ).length
+        );
+      }
+
+      if (
+        typeof result.timeLeft === "number"
+      ) {
+        setTimeLeft(result.timeLeft);
+      }
+    } catch (error) {
+      setSaveError(
+        error instanceof Error
+          ? error.message
+          : "Răspunsul nu a putut fi salvat."
+      );
+    } finally {
+      setIsSavingAnswer(false);
+    }
+  }, [
+    activeTest,
+    isAdminPreview,
+    isConfirmed,
+    isFinished,
+    isSavingAnswer,
+    question,
+    selectedAnswer,
+  ]);
+
+  const handleNextQuestion = useCallback(() => {
+    if (!activeTest || !question) {
+      return;
+    }
+
+    if (isLastQuestion) {
+      void finishTest(false);
+      return;
+    }
+
+    const nextIndex = currentQuestionIndex + 1;
+    const nextQuestion =
+      activeTest.questions[nextIndex];
+
+    const savedAnswer =
+      answersRef.current.find(
+        (answer) =>
+          answer.questionId === nextQuestion.id
+      );
+
+    setCurrentQuestionIndex(nextIndex);
+    setSelectedAnswer(
+      savedAnswer?.selectedAnswer ?? null
+    );
+    setIsConfirmed(Boolean(savedAnswer));
+    setSaveError("");
+  }, [
+    activeTest,
+    currentQuestionIndex,
+    finishTest,
+    isLastQuestion,
+    question,
+  ]);
+
+  useEffect(() => {
+    if (
+      !activeTest ||
+      isFinished ||
+      existingAttempt
+    ) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      const elapsedSeconds = Math.max(
+        0,
+        Math.floor(
+          (Date.now() - startedAtRef.current) / 1000
+        )
+      );
+
+      const remaining = Math.max(
+        0,
+        totalTime - elapsedSeconds
+      );
+
+      setTimeLeft(remaining);
+
+      if (remaining <= 0) {
+        window.clearInterval(timer);
+        void finishTest(true);
+      }
     }, 1000);
 
     return () => {
@@ -405,23 +674,31 @@ export default function TestPage() {
     };
   }, [
     activeTest,
-    confirmAnswer,
-    currentQuestionIndex,
-    isConfirmed,
+    existingAttempt,
+    finishTest,
     isFinished,
-    question,
+    totalTime,
   ]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (!question || isFinished) return;
+      if (
+        !question ||
+        isFinished ||
+        isSavingAnswer
+      ) {
+        return;
+      }
 
       const pressedKey = event.key.toLowerCase();
 
       if (!isConfirmed) {
-        const answerIndex = ["a", "b", "c", "d"].indexOf(
-          pressedKey
-        );
+        const answerIndex = [
+          "a",
+          "b",
+          "c",
+          "d",
+        ].indexOf(pressedKey);
 
         if (
           answerIndex !== -1 &&
@@ -436,7 +713,7 @@ export default function TestPage() {
           selectedAnswer !== null
         ) {
           event.preventDefault();
-          handleConfirm();
+          void handleConfirm();
         }
 
         return;
@@ -448,16 +725,23 @@ export default function TestPage() {
       }
     }
 
-    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener(
+      "keydown",
+      handleKeyDown
+    );
 
     return () => {
-      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener(
+        "keydown",
+        handleKeyDown
+      );
     };
   }, [
     handleConfirm,
     handleNextQuestion,
     isConfirmed,
     isFinished,
+    isSavingAnswer,
     question,
     selectedAnswer,
   ]);
@@ -493,11 +777,15 @@ export default function TestPage() {
           </p>
 
           <h1 className="mt-3 text-2xl font-bold text-gray-900 sm:text-3xl">
-            Ai susținut deja acest test
+            {expired
+              ? "Timpul testului a expirat"
+              : "Ai susținut deja acest test"}
           </h1>
 
           <p className="mt-3 text-gray-600">
-            Fiecare arbitru poate susține testul activ o singură dată.
+            {expired
+              ? "Testul a fost închis automat. Rezultatul include răspunsurile salvate până la expirarea celor 30 de minute."
+              : "Fiecare arbitru poate avea o singură tentativă pentru acest test."}
           </p>
 
           <div className="mt-7 grid grid-cols-2 gap-4">
@@ -529,9 +817,10 @@ export default function TestPage() {
           </div>
 
           <p className="mt-6 text-sm text-gray-500">
-            Susținut la{" "}
+            Început la{" "}
             {new Date(
-              existingAttempt.createdAt
+              existingAttempt.startedAt ??
+                existingAttempt.createdAt
             ).toLocaleString("ro-RO")}
           </p>
 
@@ -547,7 +836,11 @@ export default function TestPage() {
     );
   }
 
-  if (loadError || !activeTest || !question) {
+  if (
+    loadError ||
+    !activeTest ||
+    !question
+  ) {
     return (
       <main
         className="relative flex min-h-screen items-center justify-center overflow-hidden bg-cover bg-center bg-no-repeat px-4"
@@ -564,6 +857,13 @@ export default function TestPage() {
             {loadError ||
               "Nu există momentan niciun test publicat."}
           </p>
+
+          <Link
+            href="/"
+            className="mt-7 inline-flex w-full items-center justify-center rounded-xl bg-green-600 px-6 py-4 font-semibold text-white transition hover:bg-green-700"
+          >
+            Înapoi la pagina principală
+          </Link>
         </div>
       </main>
     );
@@ -583,6 +883,7 @@ export default function TestPage() {
             totalQuestions={
               activeTest.questions.length
             }
+            expired={expired}
           />
 
           {isAdminPreview && (
@@ -604,7 +905,8 @@ export default function TestPage() {
               <button
                 type="button"
                 onClick={() => {
-                  void saveResult(score);
+                  finishingRef.current = false;
+                  void finishTest(expired);
                 }}
                 className="mt-3 rounded-lg bg-red-600 px-4 py-2 font-semibold text-white transition hover:bg-red-700"
               >
@@ -639,8 +941,12 @@ export default function TestPage() {
 
         <TimerBar
           timeLeft={timeLeft}
-          totalTime={activeTest.timePerQuestion}
+          totalTime={totalTime}
         />
+
+        <p className="mt-3 text-sm font-medium text-gray-500">
+          Timpul este pentru întregul test și continuă să curgă dacă reîncarci pagina sau ieși temporar din test.
+        </p>
 
         <section className="mt-8">
           <h2 className="text-2xl font-bold leading-snug text-gray-900 sm:text-3xl">
@@ -649,28 +955,44 @@ export default function TestPage() {
         </section>
 
         <div className="mt-8 space-y-4">
-          {question.answers.map((answer, index) => (
-            <AnswerButton
-              key={`${question.id}-${index}`}
-              answer={answer}
-              index={index}
-              selectedAnswer={selectedAnswer}
-              correctAnswer={question.correctAnswer}
-              isConfirmed={isConfirmed}
-              onSelect={setSelectedAnswer}
-            />
-          ))}
+          {question.answers.map(
+            (answer, index) => (
+              <AnswerButton
+                key={`${question.id}-${index}`}
+                answer={answer}
+                index={index}
+                selectedAnswer={selectedAnswer}
+                correctAnswer={
+                  question.correctAnswer
+                }
+                isConfirmed={isConfirmed}
+                onSelect={
+                  isConfirmed ||
+                  isSavingAnswer
+                    ? () => {}
+                    : setSelectedAnswer
+                }
+              />
+            )
+          )}
         </div>
 
         {!isConfirmed ? (
           <div className="mt-8">
             <button
               type="button"
-              onClick={handleConfirm}
-              disabled={selectedAnswer === null}
+              onClick={() => {
+                void handleConfirm();
+              }}
+              disabled={
+                selectedAnswer === null ||
+                isSavingAnswer
+              }
               className="w-full rounded-xl bg-green-600 px-6 py-4 font-semibold text-white transition hover:bg-green-700 focus:outline-none focus:ring-4 focus:ring-green-200 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500 disabled:hover:bg-gray-300 sm:w-auto"
             >
-              Confirmă răspunsul
+              {isSavingAnswer
+                ? "Se salvează..."
+                : "Confirmă răspunsul"}
             </button>
 
             <p className="mt-3 text-sm text-gray-500">
@@ -681,17 +1003,28 @@ export default function TestPage() {
           <>
             <ExplanationCard
               isCorrect={isCorrect}
-              correctAnswer={question.correctAnswer}
-              explanation={question.explanation}
+              correctAnswer={
+                question.correctAnswer
+              }
+              explanation={
+                question.explanation
+              }
             />
 
             <button
               type="button"
-              onClick={handleNextQuestion}
-              className="mt-6 w-full rounded-xl bg-green-600 px-6 py-4 font-semibold text-white transition hover:bg-green-700 focus:outline-none focus:ring-4 focus:ring-green-200 sm:w-auto"
+              onClick={
+                handleNextQuestion
+              }
+              disabled={
+                isSavingResult
+              }
+              className="mt-6 w-full rounded-xl bg-green-600 px-6 py-4 font-semibold text-white transition hover:bg-green-700 focus:outline-none focus:ring-4 focus:ring-green-200 disabled:cursor-not-allowed disabled:bg-gray-300 sm:w-auto"
             >
               {isLastQuestion
-                ? "Finalizează testul"
+                ? isSavingResult
+                  ? "Se finalizează..."
+                  : "Finalizează testul"
                 : "Următoarea întrebare"}
             </button>
 
@@ -700,11 +1033,16 @@ export default function TestPage() {
             </p>
           </>
         )}
+
+        {saveError && (
+          <p className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+            {saveError}
+          </p>
+        )}
       </div>
     </main>
   );
 }
-
 
 function calculateGrade(
   score: number,
@@ -727,11 +1065,13 @@ function formatGrade(value: number) {
 interface GradeResultCardProps {
   score: number;
   totalQuestions: number;
+  expired: boolean;
 }
 
 function GradeResultCard({
   score,
   totalQuestions,
+  expired,
 }: GradeResultCardProps) {
   const grade = calculateGrade(
     score,
@@ -745,8 +1085,16 @@ function GradeResultCard({
       </p>
 
       <h1 className="mt-3 text-3xl font-bold text-gray-900">
-        Test finalizat
+        {expired
+          ? "Timpul a expirat"
+          : "Test finalizat"}
       </h1>
+
+      {expired && (
+        <p className="mt-3 text-gray-600">
+          Au fost luate în calcul răspunsurile salvate până la expirarea timpului.
+        </p>
+      )}
 
       <div className="mt-7 grid grid-cols-2 gap-4">
         <div className="rounded-2xl bg-gray-100 p-5">

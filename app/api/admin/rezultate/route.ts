@@ -218,6 +218,10 @@ export async function GET(request: Request) {
           "test_id",
           activeTest.id
         )
+        .eq(
+          "status",
+          "completed"
+        )
         .order("score", {
           ascending: false,
         })
