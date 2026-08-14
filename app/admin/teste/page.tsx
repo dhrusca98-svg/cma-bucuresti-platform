@@ -45,6 +45,14 @@ export default function AdminTestsPage() {
     );
 
   const [
+    deactivatingId,
+    setDeactivatingId,
+  ] =
+    useState<string | null>(
+      null
+    );
+
+  const [
     deletingId,
     setDeletingId,
   ] =
@@ -302,6 +310,106 @@ export default function AdminTestsPage() {
       );
     } finally {
       setPublishingId(
+        null
+      );
+    }
+  }
+
+  async function handleDeactivate(
+    test: AdminTest
+  ) {
+    if (!test.isActive) {
+      return;
+    }
+
+    const confirmed =
+      window.confirm(
+        `Dezactivezi testul „${test.title}”?\n\nParticipanții nu îl vor mai putea accesa. Rezultatele și răspunsurile deja înregistrate vor fi păstrate.`
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setDeactivatingId(
+      test.id
+    );
+
+    setError("");
+    setSuccess("");
+
+    try {
+      const {
+        data: { session },
+        error:
+          sessionError,
+      } =
+        await supabase.auth.getSession();
+
+      if (
+        sessionError ||
+        !session?.access_token
+      ) {
+        throw new Error(
+          "Trebuie să fii autentificat ca administrator."
+        );
+      }
+
+      const response =
+        await fetch(
+          "/api/admin/teste/publica",
+          {
+            method: "PATCH",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+
+              Authorization: `Bearer ${session.access_token}`,
+            },
+
+            body:
+              JSON.stringify({
+                testId:
+                  test.id,
+              }),
+          }
+        );
+
+      const result =
+        (await response.json()) as {
+          success?: boolean;
+          message?: string;
+          error?: string;
+        };
+
+      if (
+        !response.ok ||
+        result.error
+      ) {
+        throw new Error(
+          result.error ||
+            "Testul nu a putut fi dezactivat."
+        );
+      }
+
+      setSuccess(
+        result.message ||
+          "Testul a fost dezactivat."
+      );
+
+      await loadTests();
+    } catch (
+      deactivateError
+    ) {
+      setError(
+        deactivateError instanceof
+        Error
+          ? deactivateError.message
+          : "Testul nu a putut fi dezactivat."
+      );
+    } finally {
+      setDeactivatingId(
         null
       );
     }
@@ -649,6 +757,29 @@ export default function AdminTestsPage() {
                             <button
                               type="button"
                               onClick={() =>
+                                handleDeactivate(
+                                  test
+                                )
+                              }
+                              disabled={
+                                deletingId !==
+                                  null ||
+                                publishingId !==
+                                  null ||
+                                deactivatingId !==
+                                  null
+                              }
+                              className="rounded-xl border border-amber-300 bg-white px-4 py-2.5 text-sm font-semibold text-amber-700 transition hover:bg-amber-50 disabled:cursor-not-allowed disabled:border-gray-200 disabled:text-gray-400"
+                            >
+                              {deactivatingId ===
+                              test.id
+                                ? "Se dezactivează..."
+                                : "Dezactivează"}
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() =>
                                 handleDelete(
                                   test
                                 )
@@ -657,6 +788,8 @@ export default function AdminTestsPage() {
                                 deletingId !==
                                   null ||
                                 publishingId !==
+                                  null ||
+                                deactivatingId !==
                                   null
                               }
                               className="rounded-xl border border-red-300 bg-white px-4 py-2.5 text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:border-gray-200 disabled:text-gray-400"
@@ -699,6 +832,8 @@ export default function AdminTestsPage() {
                                 publishingId !==
                                   null ||
                                 deletingId !==
+                                  null ||
+                                deactivatingId !==
                                   null
                               }
                               className="rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm font-semibold text-gray-700 outline-none transition focus:border-green-500 focus:ring-4 focus:ring-green-100"
@@ -738,6 +873,8 @@ export default function AdminTestsPage() {
                                 publishingId !==
                                   null ||
                                 deletingId !==
+                                  null ||
+                                deactivatingId !==
                                   null
                               }
                               className="rounded-xl bg-green-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-400"
@@ -761,6 +898,8 @@ export default function AdminTestsPage() {
                                 deletingId !==
                                   null ||
                                 publishingId !==
+                                  null ||
+                                deactivatingId !==
                                   null
                               }
                               className="rounded-xl border border-red-300 bg-white px-4 py-2.5 text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:border-gray-200 disabled:text-gray-400"
