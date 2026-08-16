@@ -8,6 +8,91 @@ import {
 
 import { supabase } from "@/lib/supabase/client";
 
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (
+    typeof error === "object" &&
+    error !== null
+  ) {
+    const possibleError = error as {
+      message?: unknown;
+      error_description?: unknown;
+      error?: unknown;
+      code?: unknown;
+      status?: unknown;
+    };
+
+    if (
+      typeof possibleError.message ===
+        "string" &&
+      possibleError.message.trim()
+    ) {
+      return possibleError.message;
+    }
+
+    if (
+      typeof possibleError.error_description ===
+        "string" &&
+      possibleError.error_description.trim()
+    ) {
+      return possibleError.error_description;
+    }
+
+    if (
+      typeof possibleError.error ===
+        "string" &&
+      possibleError.error.trim()
+    ) {
+      return possibleError.error;
+    }
+
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return "Emailul nu a putut fi trimis.";
+    }
+  }
+
+  if (typeof error === "string") {
+    return error;
+  }
+
+  return "Emailul nu a putut fi trimis.";
+}
+
+function translateError(message: string) {
+  const normalized =
+    message.toLowerCase();
+
+  if (
+    normalized.includes(
+      "rate limit"
+    ) ||
+    normalized.includes(
+      "email rate limit exceeded"
+    )
+  ) {
+    return "Ai solicitat prea multe emailuri într-un interval scurt. Așteaptă puțin și încearcă din nou.";
+  }
+
+  if (
+    normalized.includes("smtp") ||
+    normalized.includes(
+      "error sending recovery email"
+    ) ||
+    normalized.includes(
+      "failed to send"
+    )
+  ) {
+    return `Emailul nu a putut fi trimis. Detalii: ${message}`;
+  }
+
+  return message;
+}
+
 export default function ForgotPasswordPage() {
   const [email, setEmail] =
     useState("");
@@ -31,27 +116,69 @@ export default function ForgotPasswordPage() {
     setIsSending(true);
 
     try {
+      const normalizedEmail =
+        email.trim().toLowerCase();
+
       const redirectTo =
         `${window.location.origin}/setare-parola`;
 
-      const { error: resetError } =
+      console.log(
+        "Trimitere resetare parolă:",
+        {
+          email: normalizedEmail,
+          redirectTo,
+        }
+      );
+
+      const {
+        data,
+        error: resetError,
+      } =
         await supabase.auth.resetPasswordForEmail(
-          email.trim().toLowerCase(),
+          normalizedEmail,
           {
             redirectTo,
           }
         );
 
+      console.log(
+        "Răspuns resetare parolă:",
+        {
+          data,
+          resetError,
+        }
+      );
+
       if (resetError) {
-        throw resetError;
+        console.error(
+          "Eroare Supabase reset password:",
+          resetError
+        );
+
+        const message =
+          getErrorMessage(
+            resetError
+          );
+
+        throw new Error(
+          translateError(message)
+        );
       }
 
       setSuccess(true);
     } catch (sendError) {
+      console.error(
+        "Eroare la trimiterea emailului:",
+        sendError
+      );
+
+      const message =
+        getErrorMessage(
+          sendError
+        );
+
       setError(
-        sendError instanceof Error
-          ? sendError.message
-          : "Emailul nu a putut fi trimis."
+        translateError(message)
       );
     } finally {
       setIsSending(false);
@@ -125,7 +252,7 @@ export default function ForgotPasswordPage() {
             </div>
 
             {error && (
-              <div className="rounded-xl border border-red-700 bg-red-900/20 px-4 py-3 text-sm text-red-300">
+              <div className="rounded-xl border border-red-700 bg-red-900/20 px-4 py-3 text-sm leading-6 text-red-300">
                 {error}
               </div>
             )}
