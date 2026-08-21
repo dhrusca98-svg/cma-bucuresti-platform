@@ -261,7 +261,9 @@ export async function GET(
         first_name,
         last_name,
         email,
-        auth_user_id
+        auth_user_id,
+        activation_email_sent_at,
+        activation_email_sent_count
       `)
       .eq("active", true)
       .order("last_name", {
@@ -333,6 +335,16 @@ export async function GET(
               authUser
                 ?.lastSignInAt ??
               null,
+
+            activationEmailSentAt:
+              participant.activation_email_sent_at ??
+              null,
+
+            activationEmailSentCount:
+              Number(
+                participant.activation_email_sent_count ??
+                  0
+              ),
           };
         }
       );
@@ -367,6 +379,20 @@ export async function GET(
           users.filter(
             (user) =>
               !user.hasAccount
+          ).length,
+
+        activationEmailSent:
+          users.filter(
+            (user) =>
+              user.activationEmailSentCount > 0
+          ).length,
+
+        activationEmailNotSent:
+          users.filter(
+            (user) =>
+              user.hasAccount &&
+              !user.activated &&
+              user.activationEmailSentCount === 0
           ).length,
       },
     });
@@ -456,7 +482,9 @@ export async function POST(
           first_name,
           last_name,
           email,
-          auth_user_id
+          auth_user_id,
+          activation_email_sent_at,
+          activation_email_sent_count
         `)
         .eq("active", true)
         .not(
@@ -510,8 +538,10 @@ export async function POST(
       );
 
     const recipients: {
+      participantId: string;
       fullName: string;
       email: string;
+      activationEmailSentCount: number;
     }[] = [];
 
     let skipped = 0;
@@ -552,10 +582,31 @@ export async function POST(
         continue;
       }
 
+      if (
+        mode === "activation" &&
+        body.allUnactivated === true &&
+        Number(
+          participant.activation_email_sent_count ??
+            0
+        ) > 0
+      ) {
+        skipped += 1;
+        continue;
+      }
+
       recipients.push({
+        participantId:
+          participant.id,
+
         fullName:
           `${participant.last_name} ${participant.first_name}`.trim(),
         email,
+
+        activationEmailSentCount:
+          Number(
+            participant.activation_email_sent_count ??
+              0
+          ),
       });
     }
 
@@ -632,6 +683,25 @@ export async function POST(
       }
 
       sent += 1;
+
+      if (mode === "activation") {
+        const { error: updateTrackingError } =
+          await adminClient
+            .from("participants")
+            .update({
+              activation_email_sent_at:
+                new Date().toISOString(),
+              activation_email_sent_count:
+                recipient.activationEmailSentCount + 1,
+            })
+            .eq("id", recipient.participantId);
+
+        if (updateTrackingError) {
+          errors.push(
+            `${recipient.fullName} (${recipient.email}): email trimis, dar evidența activării nu a putut fi actualizată (${updateTrackingError.message}).`
+          );
+        }
+      }
     }
 
     return Response.json({

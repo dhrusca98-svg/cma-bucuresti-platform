@@ -41,6 +41,8 @@ interface ActivationUser {
   hasAccount: boolean;
   activated: boolean;
   lastSignInAt: string | null;
+  activationEmailSentAt: string | null;
+  activationEmailSentCount: number;
 }
 
 interface ActivationStats {
@@ -49,6 +51,8 @@ interface ActivationStats {
   activated: number;
   notActivated: number;
   withoutAccount: number;
+  activationEmailSent: number;
+  activationEmailNotSent: number;
 }
 
 interface ActivationListResponse {
@@ -132,6 +136,9 @@ export default function ParticipantsAdminPage() {
 
   const [sendResult, setSendResult] =
     useState<SendEmailResult | null>(null);
+
+  const [activationFilter, setActivationFilter] =
+    useState<"all" | "not_sent" | "sent" | "activated">("all");
 
   async function loadActivationUsers() {
     setIsLoadingActivations(true);
@@ -220,7 +227,8 @@ export default function ParticipantsAdminPage() {
         .filter(
           (user) =>
             user.hasAccount &&
-            !user.activated
+            !user.activated &&
+            user.activationEmailSentCount === 0
         )
         .map((user) => user.participantId)
     );
@@ -645,7 +653,33 @@ export default function ParticipantsAdminPage() {
                 </div>
               </div>
 
-              <div className="mt-6 overflow-hidden rounded-xl border border-gray-200">
+              <div className="mt-6 flex flex-wrap gap-2">
+            {[
+              ["all", "Toți"],
+              ["not_sent", "Activare netrimisă"],
+              ["sent", "Activare trimisă"],
+              ["activated", "Activați"],
+            ].map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() =>
+                  setActivationFilter(
+                    value as "all" | "not_sent" | "sent" | "activated"
+                  )
+                }
+                className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
+                  activationFilter === value
+                    ? "bg-gray-900 text-white"
+                    : "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-6 overflow-hidden rounded-xl border border-gray-200">
                 <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
                   <p className="text-sm font-semibold text-gray-700">
                     Verificare — primele{" "}
@@ -852,23 +886,13 @@ export default function ParticipantsAdminPage() {
           </div>
 
           {activationStats && (
-            <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <ResultItem
-                label="Cu cont"
-                value={activationStats.withAccount}
-              />
-              <ResultItem
-                label="Activate"
-                value={activationStats.activated}
-              />
-              <ResultItem
-                label="Neactivate"
-                value={activationStats.notActivated}
-              />
-              <ResultItem
-                label="Fără cont"
-                value={activationStats.withoutAccount}
-              />
+            <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+              <ResultItem label="Cu cont" value={activationStats.withAccount} />
+              <ResultItem label="Activate" value={activationStats.activated} />
+              <ResultItem label="Neactivate" value={activationStats.notActivated} />
+              <ResultItem label="Activare trimisă" value={activationStats.activationEmailSent} />
+              <ResultItem label="Activare netrimisă" value={activationStats.activationEmailNotSent} />
+              <ResultItem label="Fără cont" value={activationStats.withoutAccount} />
             </div>
           )}
 
@@ -883,13 +907,13 @@ export default function ParticipantsAdminPage() {
               }
               disabled={
                 isSendingActivation ||
-                (activationStats?.notActivated ?? 0) === 0
+                (activationStats?.activationEmailNotSent ?? 0) === 0
               }
               className="inline-flex items-center justify-center rounded-xl bg-green-600 px-5 py-3 font-semibold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-400"
             >
               {isSendingActivation
                 ? "Se trimit emailurile..."
-                : "Trimite tuturor neactivaților"}
+                : "Trimite tuturor fără email de activare"}
             </button>
 
             <button
@@ -917,17 +941,18 @@ export default function ParticipantsAdminPage() {
               type="button"
               onClick={selectAllUnactivated}
               disabled={
-                (activationStats?.notActivated ?? 0) === 0
+                (activationStats?.activationEmailNotSent ?? 0) === 0
               }
               className="inline-flex items-center justify-center rounded-xl border border-gray-300 bg-white px-5 py-3 font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:text-gray-400"
             >
-              Selectează toți neactivații
+              Selectează toți fără email
             </button>
           </div>
 
           <p className="mt-4 text-xs leading-5 text-gray-500">
-            „Neactivat” înseamnă că utilizatorul nu și-a setat încă
-            parola prin linkul primit de la platformă.
+            „Activare trimisă” înseamnă că emailul a fost trimis cu succes,
+            dar utilizatorul nu și-a activat încă contul. Retrimiterea poate fi
+            făcută manual, dacă este nevoie.
           </p>
 
           {activationError && (
@@ -990,6 +1015,9 @@ export default function ParticipantsAdminPage() {
                       <th className="px-4 py-3 font-semibold">
                         Status
                       </th>
+                      <th className="px-4 py-3 font-semibold">
+                        Email activare
+                      </th>
                       <th className="px-4 py-3 text-right font-semibold">
                         Acțiune
                       </th>
@@ -997,7 +1025,20 @@ export default function ParticipantsAdminPage() {
                   </thead>
 
                   <tbody className="divide-y divide-gray-100">
-                    {activationUsers.map((user) => {
+                    {activationUsers
+                      .filter((user) => {
+                        if (activationFilter === "activated") {
+                          return user.activated;
+                        }
+                        if (activationFilter === "not_sent") {
+                          return user.hasAccount && !user.activated && user.activationEmailSentCount === 0;
+                        }
+                        if (activationFilter === "sent") {
+                          return user.hasAccount && !user.activated && user.activationEmailSentCount > 0;
+                        }
+                        return true;
+                      })
+                      .map((user) => {
                       const canActivate =
                         user.hasAccount &&
                         !user.activated;
@@ -1046,6 +1087,33 @@ export default function ParticipantsAdminPage() {
                           </td>
 
                           <td className="px-4 py-3">
+                            {!user.hasAccount ? (
+                              <span className="text-xs text-gray-400">—</span>
+                            ) : user.activationEmailSentCount > 0 ? (
+                              <div>
+                                <p className="text-xs font-semibold text-blue-700">Trimis</p>
+                                <p className="mt-1 text-xs text-gray-500">
+                                  {user.activationEmailSentAt
+                                    ? new Intl.DateTimeFormat("ro-RO", {
+                                        day: "2-digit", month: "2-digit", year: "numeric",
+                                        hour: "2-digit", minute: "2-digit",
+                                      }).format(new Date(user.activationEmailSentAt))
+                                    : "Data indisponibilă"}
+                                </p>
+                                <p className="mt-1 text-xs text-gray-400">
+                                  {user.activationEmailSentCount === 1
+                                    ? "1 trimitere"
+                                    : `${user.activationEmailSentCount} trimiteri`}
+                                </p>
+                              </div>
+                            ) : (
+                              <span className="inline-flex rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600">
+                                Netrimis
+                              </span>
+                            )}
+                          </td>
+
+                          <td className="px-4 py-3">
                             <div className="flex justify-end gap-2">
                               {canActivate && (
                                 <button
@@ -1069,7 +1137,9 @@ export default function ParticipantsAdminPage() {
                                   {sendingParticipantId ===
                                   user.participantId
                                     ? "Se trimite..."
-                                    : "Trimite activare"}
+                                    : user.activationEmailSentCount > 0
+                                      ? "Retrimite activarea"
+                                      : "Trimite activare"}
                                 </button>
                               )}
 
