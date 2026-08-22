@@ -27,6 +27,11 @@ interface AnswerRow {
   is_correct: boolean;
 }
 
+interface FinalAnswerInput {
+  questionId: string;
+  selectedAnswer: number;
+}
+
 function requireEnvironmentVariable(name: string) {
   const value = process.env[name];
 
@@ -400,6 +405,201 @@ function formatInProgressAnswers(
         answer.selected_answer,
     })
   );
+}
+
+async function saveOrUpdateAnswer(
+  adminClient: any,
+  attemptId: string,
+  testId: string,
+  questionId: string,
+  selectedAnswer: number
+) {
+  if (
+    !questionId ||
+    !Number.isInteger(
+      selectedAnswer
+    ) ||
+    selectedAnswer < 0 ||
+    selectedAnswer > 3
+  ) {
+    throw new Error(
+      "Răspunsul selectat nu este valid."
+    );
+  }
+
+  const {
+    data: question,
+    error: questionError,
+  } =
+    await adminClient
+      .from("questions")
+      .select(
+        "id, correct_answer"
+      )
+      .eq(
+        "id",
+        questionId
+      )
+      .eq(
+        "test_id",
+        testId
+      )
+      .maybeSingle();
+
+  if (questionError) {
+    throw new Error(
+      questionError.message
+    );
+  }
+
+  if (!question) {
+    throw new Error(
+      "Întrebarea nu aparține acestui test."
+    );
+  }
+
+  const isCorrect =
+    selectedAnswer ===
+    question.correct_answer;
+
+  const {
+    data: existingAnswer,
+    error: existingAnswerError,
+  } =
+    await adminClient
+      .from("answers")
+      .select(
+        "question_id"
+      )
+      .eq(
+        "attempt_id",
+        attemptId
+      )
+      .eq(
+        "question_id",
+        questionId
+      )
+      .maybeSingle();
+
+  if (
+    existingAnswerError
+  ) {
+    throw new Error(
+      existingAnswerError.message
+    );
+  }
+
+  if (existingAnswer) {
+    const {
+      error: updateError,
+    } =
+      await adminClient
+        .from("answers")
+        .update({
+          selected_answer:
+            selectedAnswer,
+          is_correct:
+            isCorrect,
+        })
+        .eq(
+          "attempt_id",
+          attemptId
+        )
+        .eq(
+          "question_id",
+          questionId
+        );
+
+    if (updateError) {
+      throw new Error(
+        updateError.message
+      );
+    }
+  } else {
+    const {
+      error: insertError,
+    } =
+      await adminClient
+        .from("answers")
+        .insert({
+          attempt_id:
+            attemptId,
+          question_id:
+            questionId,
+          selected_answer:
+            selectedAnswer,
+          is_correct:
+            isCorrect,
+        });
+
+    if (insertError) {
+      throw new Error(
+        insertError.message
+      );
+    }
+  }
+
+  return {
+    questionId,
+    selectedAnswer,
+    isCorrect,
+  };
+}
+
+async function syncFinalAnswers(
+  adminClient: any,
+  attemptId: string,
+  testId: string,
+  answers: FinalAnswerInput[]
+) {
+  const uniqueAnswers =
+    new Map<
+      string,
+      number
+    >();
+
+  for (
+    const answer of
+      answers
+  ) {
+    if (
+      !answer ||
+      typeof answer.questionId !==
+        "string" ||
+      !answer.questionId.trim() ||
+      !Number.isInteger(
+        answer.selectedAnswer
+      ) ||
+      answer.selectedAnswer <
+        0 ||
+      answer.selectedAnswer >
+        3
+    ) {
+      throw new Error(
+        "Unul dintre răspunsurile finale nu este valid."
+      );
+    }
+
+    uniqueAnswers.set(
+      answer.questionId.trim(),
+      answer.selectedAnswer
+    );
+  }
+
+  for (
+    const [
+      questionId,
+      selectedAnswer,
+    ] of uniqueAnswers
+  ) {
+    await saveOrUpdateAnswer(
+      adminClient,
+      attemptId,
+      testId,
+      questionId,
+      selectedAnswer
+    );
+  }
 }
 
 async function finalizeAttempt(
@@ -782,6 +982,8 @@ export async function POST(
         questionId?: string;
 
         selectedAnswer?: number;
+
+        answers?: FinalAnswerInput[];
       };
 
     if (
@@ -1255,15 +1457,11 @@ export async function POST(
               elapsedSeconds
           ),
 
-        score:
-          answers.filter(
-            (answer) =>
-              answer.is_correct ===
-              true
-          ).length,
+        answeredCount:
+          answers.length,
 
         answers:
-          formatAnswers(
+          formatInProgressAnswers(
             answers
           ),
       });
@@ -1421,147 +1619,14 @@ export async function POST(
         );
       }
 
-      const {
-        data: question,
-        error:
-          questionError,
-      } =
-        await context.adminClient
-          .from(
-            "questions"
-          )
-          .select(
-            "id, correct_answer"
-          )
-          .eq(
-            "id",
-            body.questionId
-          )
-          .eq(
-            "test_id",
-            body.testId
-          )
-          .maybeSingle();
-
-      if (
-        questionError
-      ) {
-        throw new Error(
-          questionError.message
+      const savedAnswer =
+        await saveOrUpdateAnswer(
+          context.adminClient,
+          attempt.id,
+          body.testId,
+          body.questionId,
+          body.selectedAnswer!
         );
-      }
-
-      if (!question) {
-        return Response.json(
-          {
-            error:
-              "Întrebarea nu aparține acestui test.",
-          },
-          { status: 400 }
-        );
-      }
-
-      const {
-        data:
-          existingAnswer,
-        error:
-          existingAnswerError,
-      } =
-        await context.adminClient
-          .from(
-            "answers"
-          )
-          .select(
-            "question_id, selected_answer, is_correct"
-          )
-          .eq(
-            "attempt_id",
-            attempt.id
-          )
-          .eq(
-            "question_id",
-            body.questionId
-          )
-          .maybeSingle();
-
-      if (
-        existingAnswerError
-      ) {
-        throw new Error(
-          existingAnswerError.message
-        );
-      }
-
-      if (
-        existingAnswer
-      ) {
-        const answers =
-          await getAttemptAnswers(
-            context.adminClient,
-            attempt.id
-          );
-
-        return Response.json({
-          success: true,
-
-          alreadyAnswered:
-            true,
-
-          answer: {
-            questionId:
-              existingAnswer.question_id,
-
-            selectedAnswer:
-              existingAnswer.selected_answer,
-          },
-
-          answeredCount:
-            answers.length,
-
-          timeLeft:
-            Math.max(
-              0,
-              durationSeconds -
-                getElapsedSeconds(
-                  attempt
-                )
-            ),
-        });
-      }
-
-      const isCorrect =
-        body.selectedAnswer ===
-        question.correct_answer;
-
-      const {
-        error:
-          answerError,
-      } =
-        await context.adminClient
-          .from(
-            "answers"
-          )
-          .insert({
-            attempt_id:
-              attempt.id,
-
-            question_id:
-              body.questionId,
-
-            selected_answer:
-              body.selectedAnswer,
-
-            is_correct:
-              isCorrect,
-          });
-
-      if (
-        answerError
-      ) {
-        throw new Error(
-          answerError.message
-        );
-      }
 
       const answers =
         await getAttemptAnswers(
@@ -1569,7 +1634,12 @@ export async function POST(
           attempt.id
         );
 
-      const score =
+      /*
+       * Putem menține scorul în DB pentru dashboard,
+       * dar NU îl trimitem participantului cât timp
+       * testul este în desfășurare.
+       */
+      const currentScore =
         answers.filter(
           (answer) =>
             answer.is_correct ===
@@ -1579,7 +1649,7 @@ export async function POST(
       const percentage =
         attempt.total_questions >
         0
-          ? (score /
+          ? (currentScore /
               attempt.total_questions) *
             100
           : 0;
@@ -1589,11 +1659,10 @@ export async function POST(
           attemptUpdateError,
       } =
         await context.adminClient
-          .from(
-            "attempts"
-          )
+          .from("attempts")
           .update({
-            score,
+            score:
+              currentScore,
 
             percentage,
 
@@ -1623,10 +1692,10 @@ export async function POST(
 
         answer: {
           questionId:
-            body.questionId,
+            savedAnswer.questionId,
 
           selectedAnswer:
-            body.selectedAnswer,
+            savedAnswer.selectedAnswer,
         },
 
         answeredCount:
@@ -1647,6 +1716,29 @@ export async function POST(
       body.action ===
       "finish"
     ) {
+      /*
+       * Dacă submit-ul vine înainte de expirarea timpului,
+       * sincronizăm toate selecțiile curente încă o dată.
+       * Astfel, ultima alegere din UI este cea finală chiar
+       * dacă un autosave anterior a ajuns mai târziu.
+       */
+      if (
+        Array.isArray(
+          body.answers
+        ) &&
+        getElapsedSeconds(
+          attempt
+        ) <
+          durationSeconds
+      ) {
+        await syncFinalAnswers(
+          context.adminClient,
+          attempt.id,
+          body.testId,
+          body.answers
+        );
+      }
+
       const finalResult =
         await finalizeAttempt(
           context.adminClient,

@@ -4,13 +4,11 @@ interface CreateQuestionInput {
   question?: string;
   answers?: string[];
   correctAnswer?: number;
-  explanation?: string;
-  law?: number;
 }
 
 interface CreateTestBody {
   title?: string;
-  timePerQuestion?: number;
+  durationMinutes?: number;
   questions?: CreateQuestionInput[];
 }
 
@@ -114,10 +112,7 @@ async function requireAdministrator(
     accessToken
   );
 
-  if (
-    userError ||
-    !user
-  ) {
+  if (userError || !user) {
     return {
       errorResponse: Response.json(
         {
@@ -160,29 +155,30 @@ function validateBody(
 
   if (
     !Number.isInteger(
-      body.timePerQuestion
+      body.durationMinutes
     ) ||
     Number(
-      body.timePerQuestion
-    ) < 10
+      body.durationMinutes
+    ) < 1 ||
+    Number(
+      body.durationMinutes
+    ) > 180
   ) {
-    return "Timpul per întrebare trebuie să fie de minimum 10 secunde.";
+    return "Durata testului trebuie să fie între 1 și 180 de minute.";
   }
 
   if (
     !Array.isArray(
       body.questions
     ) ||
-    body.questions.length ===
-      0
+    body.questions.length === 0
   ) {
     return "Testul trebuie să conțină cel puțin o întrebare.";
   }
 
   for (
     let index = 0;
-    index <
-    body.questions.length;
+    index < body.questions.length;
     index++
   ) {
     const question =
@@ -201,12 +197,10 @@ function validateBody(
       !Array.isArray(
         question.answers
       ) ||
-      question.answers.length !==
-        4 ||
+      question.answers.length !== 4 ||
       question.answers.some(
         (answer) =>
-          typeof answer !==
-            "string" ||
+          typeof answer !== "string" ||
           !answer.trim()
       )
     ) {
@@ -225,18 +219,6 @@ function validateBody(
       ) > 3
     ) {
       return `Răspunsul corect pentru întrebarea ${questionNumber} nu este valid.`;
-    }
-
-    if (
-      question.law !==
-        undefined &&
-      (!Number.isInteger(
-        question.law
-      ) ||
-        question.law < 1 ||
-        question.law > 17)
-    ) {
-      return `Legea pentru întrebarea ${questionNumber} trebuie să fie între 1 și 17.`;
     }
   }
 
@@ -272,9 +254,7 @@ export async function POST(
     const validationError =
       validateBody(body);
 
-    if (
-      validationError
-    ) {
+    if (validationError) {
       return Response.json(
         {
           error:
@@ -287,14 +267,23 @@ export async function POST(
     createdTestId =
       crypto.randomUUID();
 
+    const questionCount =
+      body.questions!.length;
+
     /*
-     * IMPORTANT:
-     * Salvăm testul ca INACTIV.
-     *
-     * Publicarea se face separat
-     * din /admin/teste, unde alegi
-     * perioada de disponibilitate.
+     * Păstrăm time_per_question pentru compatibilitate
+     * cu structura existentă, dar testarea folosește
+     * duration_minutes ca limită globală.
      */
+    const legacyTimePerQuestion =
+      Math.max(
+        10,
+        Math.round(
+          (body.durationMinutes! * 60) /
+            questionCount
+        )
+      );
+
     const {
       error: testError,
     } = await adminClient
@@ -307,7 +296,10 @@ export async function POST(
           body.title!.trim(),
 
         time_per_question:
-          body.timePerQuestion!,
+          legacyTimePerQuestion,
+
+        duration_minutes:
+          body.durationMinutes!,
 
         is_active:
           false,
@@ -352,12 +344,14 @@ export async function POST(
           correct_answer:
             question.correctAnswer!,
 
+          /*
+           * Coloanele pot rămâne momentan în DB.
+           * Nu le mai folosim în aplicație.
+           */
           explanation:
-            question.explanation?.trim() ||
             null,
 
           law:
-            question.law ??
             null,
         })
       );
@@ -394,11 +388,6 @@ export async function POST(
       error
     );
 
-    /*
-     * Dacă întrebările nu s-au putut salva,
-     * ștergem și testul pentru a nu rămâne
-     * un test incomplet în baza de date.
-     */
     try {
       if (
         createdTestId
@@ -409,9 +398,7 @@ export async function POST(
           createClients();
 
         await adminClient
-          .from(
-            "questions"
-          )
+          .from("questions")
           .delete()
           .eq(
             "test_id",

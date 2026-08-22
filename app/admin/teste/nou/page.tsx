@@ -14,8 +14,6 @@ interface DraftQuestion {
   question: string;
   answers: string[];
   correctAnswer: number;
-  explanation: string;
-  law?: number;
 }
 
 interface ExcelQuestionRow {
@@ -25,50 +23,79 @@ interface ExcelQuestionRow {
   C?: string;
   D?: string;
   Correct?: string;
-  Explanation?: string;
-  Law?: number | string;
 }
 
-const EMPTY_QUESTION: Omit<DraftQuestion, "id"> = {
+const EMPTY_QUESTION: Omit<
+  DraftQuestion,
+  "id"
+> = {
   question: "",
   answers: ["", "", "", ""],
   correctAnswer: 0,
-  explanation: "",
-  law: undefined,
 };
 
 export default function NewTestPage() {
   const router = useRouter();
 
-  const [title, setTitle] = useState("Test teoretic");
-  const [timePerQuestion, setTimePerQuestion] = useState(90);
+  const [title, setTitle] =
+    useState("Test teoretic");
 
-  const [questions, setQuestions] = useState<DraftQuestion[]>([
+  const [
+    durationMinutes,
+    setDurationMinutes,
+  ] = useState(30);
+
+  const [
+    questions,
+    setQuestions,
+  ] = useState<DraftQuestion[]>([
     {
       id: 1,
       ...EMPTY_QUESTION,
+      answers: [
+        ...EMPTY_QUESTION.answers,
+      ],
     },
   ]);
 
-  const [importMessage, setImportMessage] = useState("");
-  const [importError, setImportError] = useState("");
-  const [saveMessage, setSaveMessage] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
+  const [
+    importMessage,
+    setImportMessage,
+  ] = useState("");
+
+  const [
+    importError,
+    setImportError,
+  ] = useState("");
+
+  const [
+    saveMessage,
+    setSaveMessage,
+  ] = useState("");
+
+  const [
+    isSaving,
+    setIsSaving,
+  ] = useState(false);
 
   function updateQuestion(
     questionIndex: number,
-    field: keyof Omit<DraftQuestion, "answers">,
-    value: string | number | undefined
+    field:
+      | "question"
+      | "correctAnswer",
+    value: string | number
   ) {
-    setQuestions((currentQuestions) =>
-      currentQuestions.map((question, index) =>
-        index === questionIndex
-          ? {
-              ...question,
-              [field]: value,
-            }
-          : question
-      )
+    setQuestions(
+      (currentQuestions) =>
+        currentQuestions.map(
+          (question, index) =>
+            index === questionIndex
+              ? {
+                  ...question,
+                  [field]: value,
+                }
+              : question
+        )
     );
 
     setSaveMessage("");
@@ -79,63 +106,99 @@ export default function NewTestPage() {
     answerIndex: number,
     value: string
   ) {
-    setQuestions((currentQuestions) =>
-      currentQuestions.map((question, index) => {
-        if (index !== questionIndex) {
-          return question;
-        }
+    setQuestions(
+      (currentQuestions) =>
+        currentQuestions.map(
+          (question, index) => {
+            if (
+              index !== questionIndex
+            ) {
+              return question;
+            }
 
-        const updatedAnswers = [...question.answers];
-        updatedAnswers[answerIndex] = value;
+            const updatedAnswers =
+              [
+                ...question.answers,
+              ];
 
-        return {
-          ...question,
-          answers: updatedAnswers,
-        };
-      })
+            updatedAnswers[
+              answerIndex
+            ] = value;
+
+            return {
+              ...question,
+              answers:
+                updatedAnswers,
+            };
+          }
+        )
     );
 
     setSaveMessage("");
   }
 
   function addQuestion() {
-    setQuestions((currentQuestions) => [
-      ...currentQuestions,
-      {
-        id: currentQuestions.length + 1,
-        ...EMPTY_QUESTION,
-        answers: [...EMPTY_QUESTION.answers],
-      },
-    ]);
+    setQuestions(
+      (currentQuestions) => [
+        ...currentQuestions,
+        {
+          id:
+            currentQuestions.length +
+            1,
+          ...EMPTY_QUESTION,
+          answers: [
+            ...EMPTY_QUESTION.answers,
+          ],
+        },
+      ]
+    );
 
     setSaveMessage("");
   }
 
-  function removeQuestion(questionIndex: number) {
-    setQuestions((currentQuestions) =>
-      currentQuestions
-        .filter((_, index) => index !== questionIndex)
-        .map((question, index) => ({
-          ...question,
-          id: index + 1,
-        }))
+  function removeQuestion(
+    questionIndex: number
+  ) {
+    setQuestions(
+      (currentQuestions) =>
+        currentQuestions
+          .filter(
+            (_, index) =>
+              index !==
+              questionIndex
+          )
+          .map(
+            (
+              question,
+              index
+            ) => ({
+              ...question,
+              id: index + 1,
+            })
+          )
     );
 
     setSaveMessage("");
   }
 
   async function handleExcelImport(
-    event: ChangeEvent<HTMLInputElement>
+    event:
+      ChangeEvent<HTMLInputElement>
   ) {
-    const file = event.target.files?.[0];
+    const file =
+      event.target.files?.[0];
 
     if (!file) {
       return;
     }
 
-    const excelTitle = file.name
-      .replace(/\.(xlsx|xls)$/i, "")
-      .trim();
+    const excelTitle =
+      file.name
+        .replace(
+          /\.(xlsx|xls)$/i,
+          ""
+        )
+        .trim();
 
     if (excelTitle) {
       setTitle(excelTitle);
@@ -146,13 +209,19 @@ export default function NewTestPage() {
     setSaveMessage("");
 
     try {
-      const arrayBuffer = await file.arrayBuffer();
+      const arrayBuffer =
+        await file.arrayBuffer();
 
-      const workbook = XLSX.read(arrayBuffer, {
-        type: "array",
-      });
+      const workbook =
+        XLSX.read(
+          arrayBuffer,
+          {
+            type: "array",
+          }
+        );
 
-      const firstSheetName = workbook.SheetNames[0];
+      const firstSheetName =
+        workbook.SheetNames[0];
 
       if (!firstSheetName) {
         throw new Error(
@@ -160,105 +229,123 @@ export default function NewTestPage() {
         );
       }
 
-      const worksheet = workbook.Sheets[firstSheetName];
+      const worksheet =
+        workbook.Sheets[
+          firstSheetName
+        ];
 
-      const rows = XLSX.utils.sheet_to_json<ExcelQuestionRow>(
-        worksheet,
-        {
-          defval: "",
-        }
-      );
+      const rows =
+        XLSX.utils.sheet_to_json<ExcelQuestionRow>(
+          worksheet,
+          {
+            defval: "",
+          }
+        );
 
-      if (rows.length === 0) {
+      if (
+        rows.length === 0
+      ) {
         throw new Error(
           "Fișierul Excel nu conține întrebări."
         );
       }
 
-      const importedQuestions: DraftQuestion[] = rows.map(
-        (row, index) => {
-          const excelRowNumber = index + 2;
+      const importedQuestions:
+        DraftQuestion[] =
+          rows.map(
+            (
+              row,
+              index
+            ) => {
+              const excelRowNumber =
+                index + 2;
 
-          const questionText = String(
-            row.Question ?? ""
-          ).trim();
+              const questionText =
+                String(
+                  row.Question ??
+                    ""
+                ).trim();
 
-          const answers = [
-            String(row.A ?? "").trim(),
-            String(row.B ?? "").trim(),
-            String(row.C ?? "").trim(),
-            String(row.D ?? "").trim(),
-          ];
+              const answers = [
+                String(
+                  row.A ?? ""
+                ).trim(),
+                String(
+                  row.B ?? ""
+                ).trim(),
+                String(
+                  row.C ?? ""
+                ).trim(),
+                String(
+                  row.D ?? ""
+                ).trim(),
+              ];
 
-          const correctLetter = String(
-            row.Correct ?? ""
-          )
-            .trim()
-            .toUpperCase();
+              const correctLetter =
+                String(
+                  row.Correct ??
+                    ""
+                )
+                  .trim()
+                  .toUpperCase();
 
-          const correctAnswer = [
-            "A",
-            "B",
-            "C",
-            "D",
-          ].indexOf(correctLetter);
+              const correctAnswer =
+                [
+                  "A",
+                  "B",
+                  "C",
+                  "D",
+                ].indexOf(
+                  correctLetter
+                );
 
-          const explanation = String(
-            row.Explanation ?? ""
-          ).trim();
+              if (
+                !questionText
+              ) {
+                throw new Error(
+                  `Întrebarea de pe rândul ${excelRowNumber} nu are text.`
+                );
+              }
 
-          const lawText = String(row.Law ?? "").trim();
+              if (
+                answers.some(
+                  (answer) =>
+                    !answer
+                )
+              ) {
+                throw new Error(
+                  `Rândul ${excelRowNumber} trebuie să conțină toate cele patru variante de răspuns.`
+                );
+              }
 
-          if (!questionText) {
-            throw new Error(
-              `Întrebarea de pe rândul ${excelRowNumber} nu are text.`
-            );
-          }
+              if (
+                correctAnswer ===
+                -1
+              ) {
+                throw new Error(
+                  `Răspunsul corect de pe rândul ${excelRowNumber} trebuie să fie A, B, C sau D.`
+                );
+              }
 
-          if (answers.some((answer) => !answer)) {
-            throw new Error(
-              `Rândul ${excelRowNumber} trebuie să conțină toate cele patru variante de răspuns.`
-            );
-          }
-
-          if (correctAnswer === -1) {
-            throw new Error(
-              `Răspunsul corect de pe rândul ${excelRowNumber} trebuie să fie A, B, C sau D.`
-            );
-          }
-
-          let law: number | undefined;
-
-          if (lawText) {
-            law = Number(lawText);
-
-            if (
-              !Number.isInteger(law) ||
-              law < 1 ||
-              law > 17
-            ) {
-              throw new Error(
-                `Legea de pe rândul ${excelRowNumber} trebuie să fie un număr între 1 și 17.`
-              );
+              return {
+                id:
+                  index + 1,
+                question:
+                  questionText,
+                answers,
+                correctAnswer,
+              };
             }
-          }
+          );
 
-          return {
-            id: index + 1,
-            question: questionText,
-            answers,
-            correctAnswer,
-            explanation,
-            law,
-          };
-        }
+      setQuestions(
+        importedQuestions
       );
-
-      setQuestions(importedQuestions);
 
       setImportMessage(
         `${importedQuestions.length} ${
-          importedQuestions.length === 1
+          importedQuestions.length ===
+          1
             ? "întrebare a fost importată"
             : "întrebări au fost importate"
         } cu succes.`
@@ -270,7 +357,8 @@ export default function NewTestPage() {
           : "Fișierul nu a putut fi importat."
       );
     } finally {
-      event.target.value = "";
+      event.target.value =
+        "";
     }
   }
 
@@ -280,16 +368,33 @@ export default function NewTestPage() {
     }
 
     if (
-      !Number.isInteger(timePerQuestion) ||
-      timePerQuestion < 10
+      !Number.isInteger(
+        durationMinutes
+      ) ||
+      durationMinutes < 1 ||
+      durationMinutes > 180
     ) {
-      return "Timpul per întrebare trebuie să fie de minimum 10 secunde.";
+      return "Durata testului trebuie să fie între 1 și 180 de minute.";
     }
 
-    for (let index = 0; index < questions.length; index++) {
-      const question = questions[index];
+    if (
+      questions.length === 0
+    ) {
+      return "Testul trebuie să conțină cel puțin o întrebare.";
+    }
 
-      if (!question.question.trim()) {
+    for (
+      let index = 0;
+      index <
+      questions.length;
+      index++
+    ) {
+      const question =
+        questions[index];
+
+      if (
+        !question.question.trim()
+      ) {
         return `Completează textul întrebării ${
           index + 1
         }.`;
@@ -297,7 +402,8 @@ export default function NewTestPage() {
 
       if (
         question.answers.some(
-          (answer) => !answer.trim()
+          (answer) =>
+            !answer.trim()
         )
       ) {
         return `Completează toate variantele de răspuns pentru întrebarea ${
@@ -306,22 +412,15 @@ export default function NewTestPage() {
       }
 
       if (
-        question.correctAnswer < 0 ||
+        question.correctAnswer <
+          0 ||
         question.correctAnswer >
-          question.answers.length - 1
+          question.answers.length -
+            1
       ) {
         return `Selectează răspunsul corect pentru întrebarea ${
           index + 1
         }.`;
-      }
-
-      if (
-        question.law !== undefined &&
-        (question.law < 1 || question.law > 17)
-      ) {
-        return `Legea pentru întrebarea ${
-          index + 1
-        } trebuie să fie între 1 și 17.`;
       }
     }
 
@@ -330,32 +429,45 @@ export default function NewTestPage() {
 
   function buildTest() {
     return {
-      id: crypto.randomUUID(),
-      title: title.trim(),
-      timePerQuestion,
-      updatedAt: new Date().toISOString(),
-      questions: questions.map((question) => ({
-        ...question,
-        question: question.question.trim(),
-        answers: question.answers.map((answer) =>
-          answer.trim()
+      title:
+        title.trim(),
+
+      durationMinutes,
+
+      questions:
+        questions.map(
+          (question) => ({
+            question:
+              question.question.trim(),
+
+            answers:
+              question.answers.map(
+                (answer) =>
+                  answer.trim()
+              ),
+
+            correctAnswer:
+              question.correctAnswer,
+          })
         ),
-        explanation: question.explanation.trim(),
-      })),
     };
   }
 
   async function handleSubmit(
-    event: FormEvent<HTMLFormElement>
+    event:
+      FormEvent<HTMLFormElement>
   ) {
     event.preventDefault();
 
     setSaveMessage("");
 
-    const validationError = validateTest();
+    const validationError =
+      validateTest();
 
     if (validationError) {
-      setSaveMessage(validationError);
+      setSaveMessage(
+        validationError
+      );
       return;
     }
 
@@ -365,7 +477,8 @@ export default function NewTestPage() {
       const {
         data: { session },
         error: sessionError,
-      } = await supabase.auth.getSession();
+      } =
+        await supabase.auth.getSession();
 
       if (
         sessionError ||
@@ -376,59 +489,66 @@ export default function NewTestPage() {
         );
       }
 
-      const preparedTest = buildTest();
+      const preparedTest =
+        buildTest();
 
-      const response = await fetch(
-        "/api/admin/teste/creeaza",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({
-            title: preparedTest.title,
-            timePerQuestion:
-              preparedTest.timePerQuestion,
-            questions:
-              preparedTest.questions.map(
-                (question) => ({
-                  question: question.question,
-                  answers: question.answers,
-                  correctAnswer:
-                    question.correctAnswer,
-                  explanation:
-                    question.explanation,
-                  law: question.law,
-                })
+      const response =
+        await fetch(
+          "/api/admin/teste/creeaza",
+          {
+            method:
+              "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+
+              Authorization:
+                `Bearer ${session.access_token}`,
+            },
+
+            body:
+              JSON.stringify(
+                preparedTest
               ),
-          }),
-        }
-      );
+          }
+        );
 
-      const result = (await response.json()) as {
-        success?: boolean;
-        testId?: string;
-        message?: string;
-        error?: string;
-      };
+      const result =
+        (await response.json()) as {
+          success?: boolean;
+          testId?: string;
+          message?: string;
+          error?: string;
+        };
 
-      if (!response.ok || result.error) {
+      if (
+        !response.ok ||
+        result.error
+      ) {
         throw new Error(
           result.error ||
             "Testul nu a putut fi salvat."
         );
       }
 
-      localStorage.removeItem("activeTest");
-      localStorage.removeItem("savedTest");
+      localStorage.removeItem(
+        "activeTest"
+      );
+
+      localStorage.removeItem(
+        "savedTest"
+      );
 
       setSaveMessage(
         result.message ||
           "Testul a fost salvat."
       );
 
-      router.push("/admin/teste");
+      router.push(
+        "/admin/teste"
+      );
+
       router.refresh();
     } catch (error) {
       console.error(
@@ -449,7 +569,9 @@ export default function NewTestPage() {
   return (
     <main className="min-h-screen bg-gray-50 px-4 py-10 sm:px-6">
       <form
-        onSubmit={handleSubmit}
+        onSubmit={
+          handleSubmit
+        }
         className="mx-auto max-w-5xl"
       >
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -463,23 +585,21 @@ export default function NewTestPage() {
             </h1>
 
             <p className="mt-2 text-gray-600">
-              Completează informațiile testului și
-              adaugă întrebările manual sau prin
-              importarea unui fișier Excel.
+              Completează informațiile testului și adaugă întrebările manual sau prin importarea unui fișier Excel.
             </p>
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <button
-              type="submit"
-              disabled={isSaving}
-              className="inline-flex items-center justify-center rounded-xl bg-green-600 px-5 py-3 font-semibold text-white transition hover:bg-green-700 focus:outline-none focus:ring-4 focus:ring-green-200 disabled:cursor-not-allowed disabled:bg-gray-400"
-            >
-              {isSaving
-                ? "Se salvează..."
-                : "Salvează testul"}
-            </button>
-          </div>
+          <button
+            type="submit"
+            disabled={
+              isSaving
+            }
+            className="inline-flex items-center justify-center rounded-xl bg-green-600 px-5 py-3 font-semibold text-white transition hover:bg-green-700 focus:outline-none focus:ring-4 focus:ring-green-200 disabled:cursor-not-allowed disabled:bg-gray-400"
+          >
+            {isSaving
+              ? "Se salvează..."
+              : "Salvează testul"}
+          </button>
         </div>
 
         <section className="mt-10 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
@@ -494,20 +614,19 @@ export default function NewTestPage() {
               </span>
 
               <p className="mt-1 text-sm leading-6 text-gray-500">
-                Fișierul trebuie să conțină coloanele:
-                Question, A, B, C, D, Correct,
-                Explanation și Law.
+                Fișierul trebuie să conțină exact coloanele: Question, A, B, C, D, Correct.
               </p>
 
               <p className="mt-1 text-sm text-gray-500">
                 În coloana Correct scrie A, B, C sau D.
-                Coloana Law este opțională.
               </p>
 
               <input
                 type="file"
                 accept=".xlsx,.xls"
-                onChange={handleExcelImport}
+                onChange={
+                  handleExcelImport
+                }
                 className="mt-4 block w-full text-sm text-gray-600 file:mr-4 file:cursor-pointer file:rounded-lg file:border-0 file:bg-green-600 file:px-4 file:py-2 file:font-semibold file:text-white hover:file:bg-green-700"
               />
             </label>
@@ -534,9 +653,15 @@ export default function NewTestPage() {
               <input
                 type="text"
                 value={title}
-                onChange={(event) => {
-                  setTitle(event.target.value);
-                  setSaveMessage("");
+                onChange={(
+                  event
+                ) => {
+                  setTitle(
+                    event.target.value
+                  );
+                  setSaveMessage(
+                    ""
+                  );
                 }}
                 className="mt-2 w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 outline-none transition focus:border-green-500 focus:ring-4 focus:ring-green-100"
               />
@@ -544,28 +669,41 @@ export default function NewTestPage() {
 
             <label className="block">
               <span className="text-sm font-semibold text-gray-700">
-                Timp per întrebare
+                Durata testului
               </span>
 
               <div className="relative mt-2">
                 <input
                   type="number"
-                  min={10}
+                  min={1}
+                  max={180}
                   step={1}
-                  value={timePerQuestion}
-                  onChange={(event) => {
-                    setTimePerQuestion(
-                      Number(event.target.value)
+                  value={
+                    durationMinutes
+                  }
+                  onChange={(
+                    event
+                  ) => {
+                    setDurationMinutes(
+                      Number(
+                        event.target.value
+                      )
                     );
-                    setSaveMessage("");
+                    setSaveMessage(
+                      ""
+                    );
                   }}
-                  className="w-full rounded-xl border border-gray-300 px-4 py-3 pr-24 text-gray-900 outline-none transition focus:border-green-500 focus:ring-4 focus:ring-green-100"
+                  className="w-full rounded-xl border border-gray-300 px-4 py-3 pr-20 text-gray-900 outline-none transition focus:border-green-500 focus:ring-4 focus:ring-green-100"
                 />
 
                 <span className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-sm text-gray-500">
-                  secunde
+                  minute
                 </span>
               </div>
+
+              <p className="mt-2 text-xs text-gray-500">
+                Timpul este pentru întregul test. Implicit: 30 minute.
+              </p>
             </label>
           </div>
         </section>
@@ -577,13 +715,16 @@ export default function NewTestPage() {
             </h2>
 
             <p className="mt-1 text-sm text-gray-600">
-              Total: {questions.length}
+              Total:{" "}
+              {questions.length}
             </p>
           </div>
 
           <button
             type="button"
-            onClick={addQuestion}
+            onClick={
+              addQuestion
+            }
             className="inline-flex items-center justify-center rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
           >
             Adaugă întrebare
@@ -592,21 +733,31 @@ export default function NewTestPage() {
 
         <section className="mt-5 space-y-6">
           {questions.map(
-            (question, questionIndex) => (
+            (
+              question,
+              questionIndex
+            ) => (
               <article
-                key={question.id}
+                key={
+                  question.id
+                }
                 className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm"
               >
                 <div className="flex items-center justify-between gap-4">
                   <h2 className="text-lg font-bold text-gray-900">
-                    Întrebarea {questionIndex + 1}
+                    Întrebarea{" "}
+                    {questionIndex +
+                      1}
                   </h2>
 
-                  {questions.length > 1 && (
+                  {questions.length >
+                    1 && (
                     <button
                       type="button"
                       onClick={() =>
-                        removeQuestion(questionIndex)
+                        removeQuestion(
+                          questionIndex
+                        )
                       }
                       className="text-sm font-semibold text-red-600 transition hover:text-red-700"
                     >
@@ -622,41 +773,22 @@ export default function NewTestPage() {
                     </span>
 
                     <textarea
-                      value={question.question}
-                      onChange={(event) =>
+                      value={
+                        question.question
+                      }
+                      onChange={(
+                        event
+                      ) =>
                         updateQuestion(
                           questionIndex,
                           "question",
-                          event.target.value
+                          event.target
+                            .value
                         )
                       }
                       rows={4}
                       placeholder="Scrie textul întrebării..."
                       className="mt-2 w-full resize-y rounded-xl border border-gray-300 px-4 py-3 text-gray-900 outline-none transition focus:border-green-500 focus:ring-4 focus:ring-green-100"
-                    />
-                  </label>
-
-                  <label className="block max-w-xs">
-                    <span className="text-sm font-semibold text-gray-700">
-                      Legea
-                    </span>
-
-                    <input
-                      type="number"
-                      min={1}
-                      max={17}
-                      value={question.law ?? ""}
-                      onChange={(event) =>
-                        updateQuestion(
-                          questionIndex,
-                          "law",
-                          event.target.value
-                            ? Number(event.target.value)
-                            : undefined
-                        )
-                      }
-                      placeholder="Opțional"
-                      className="mt-2 w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 outline-none transition focus:border-green-500 focus:ring-4 focus:ring-green-100"
                     />
                   </label>
 
@@ -667,9 +799,14 @@ export default function NewTestPage() {
 
                     <div className="mt-3 space-y-3">
                       {question.answers.map(
-                        (answer, answerIndex) => (
+                        (
+                          answer,
+                          answerIndex
+                        ) => (
                           <div
-                            key={answerIndex}
+                            key={
+                              answerIndex
+                            }
                             className="flex items-center gap-3"
                           >
                             <input
@@ -686,30 +823,36 @@ export default function NewTestPage() {
                                   answerIndex
                                 )
                               }
-                              aria-label={`Răspunsul ${
-                                answerIndex + 1
-                              } este corect`}
+                              aria-label={`Răspunsul ${answerIndex + 1} este corect`}
                               className="h-5 w-5 shrink-0 accent-green-600"
                             />
 
                             <span className="w-6 shrink-0 text-sm font-bold text-gray-500">
                               {String.fromCharCode(
-                                65 + answerIndex
+                                65 +
+                                  answerIndex
                               )}
                             </span>
 
                             <input
                               type="text"
-                              value={answer}
-                              onChange={(event) =>
+                              value={
+                                answer
+                              }
+                              onChange={(
+                                event
+                              ) =>
                                 updateAnswer(
                                   questionIndex,
                                   answerIndex,
-                                  event.target.value
+                                  event
+                                    .target
+                                    .value
                                 )
                               }
                               placeholder={`Varianta ${String.fromCharCode(
-                                65 + answerIndex
+                                65 +
+                                  answerIndex
                               )}`}
                               className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 outline-none transition focus:border-green-500 focus:ring-4 focus:ring-green-100"
                             />
@@ -719,30 +862,9 @@ export default function NewTestPage() {
                     </div>
 
                     <p className="mt-3 text-sm text-gray-500">
-                      Selectează cercul din dreptul
-                      răspunsului corect.
+                      Selectează cercul din dreptul răspunsului corect.
                     </p>
                   </div>
-
-                  <label className="block">
-                    <span className="text-sm font-semibold text-gray-700">
-                      Explicație
-                    </span>
-
-                    <textarea
-                      value={question.explanation}
-                      onChange={(event) =>
-                        updateQuestion(
-                          questionIndex,
-                          "explanation",
-                          event.target.value
-                        )
-                      }
-                      rows={4}
-                      placeholder="Explică de ce răspunsul selectat este corect..."
-                      className="mt-2 w-full resize-y rounded-xl border border-gray-300 px-4 py-3 text-gray-900 outline-none transition focus:border-green-500 focus:ring-4 focus:ring-green-100"
-                    />
-                  </label>
                 </div>
               </article>
             )
@@ -752,7 +874,9 @@ export default function NewTestPage() {
         {saveMessage && (
           <p
             className={`mt-8 rounded-xl border px-4 py-3 text-sm font-medium ${
-              saveMessage.startsWith("Testul a fost")
+              saveMessage.includes(
+                "a fost salvat"
+              )
                 ? "border-green-200 bg-green-50 text-green-700"
                 : "border-red-200 bg-red-50 text-red-700"
             }`}
@@ -764,7 +888,9 @@ export default function NewTestPage() {
         <div className="mt-8 flex flex-col gap-3 sm:flex-row">
           <button
             type="button"
-            onClick={addQuestion}
+            onClick={
+              addQuestion
+            }
             className="inline-flex items-center justify-center rounded-xl border border-gray-300 bg-white px-5 py-3 font-semibold text-gray-700 transition hover:bg-gray-50"
           >
             Adaugă întrebare
@@ -772,7 +898,9 @@ export default function NewTestPage() {
 
           <button
             type="submit"
-            disabled={isSaving}
+            disabled={
+              isSaving
+            }
             className="inline-flex items-center justify-center rounded-xl bg-green-600 px-5 py-3 font-semibold text-white transition hover:bg-green-700 focus:outline-none focus:ring-4 focus:ring-green-200 disabled:cursor-not-allowed disabled:bg-gray-400"
           >
             {isSaving
