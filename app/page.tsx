@@ -13,17 +13,15 @@ import { supabase } from "@/lib/supabase/client";
 interface ActiveTest {
   id: string;
   title: string;
-  timePerQuestion: number;
+  durationMinutes: number;
   availableUntil: string | null;
-  updatedAt?: string;
+  createdAt?: string;
 
   questions: {
     id: string;
+    orderNumber: number;
     question: string;
     answers: string[];
-    correctAnswer: number;
-    explanation: string;
-    law?: number;
   }[];
 }
 
@@ -35,27 +33,6 @@ interface ExistingAttempt {
   createdAt: string;
 }
 
-interface SupabaseQuestion {
-  id: string;
-  order_number: number;
-  question: string;
-  answer_a: string;
-  answer_b: string;
-  answer_c: string;
-  answer_d: string;
-  correct_answer: number;
-  explanation: string | null;
-  law: number | null;
-}
-
-interface SupabaseTest {
-  id: string;
-  title: string;
-  time_per_question: number;
-  available_until: string | null;
-  created_at: string;
-  questions: SupabaseQuestion[];
-}
 
 export default function Home() {
   const [
@@ -122,60 +99,19 @@ export default function Home() {
       );
 
       try {
-        const nowIso =
-          new Date().toISOString();
-
-        /*
-         * Căutăm doar testul:
-         * - marcat activ
-         * - care încă nu a expirat
-         */
         const {
-          data,
-          error,
-        } = await supabase
-          .from("tests")
-          .select(`
-            id,
-            title,
-            time_per_question,
-            available_until,
-            created_at,
-            questions (
-              id,
-              order_number,
-              question,
-              answer_a,
-              answer_b,
-              answer_c,
-              answer_d,
-              correct_answer,
-              explanation,
-              law
-            )
-          `)
-          .eq(
-            "is_active",
-            true
-          )
-          .gt(
-            "available_until",
-            nowIso
-          )
-          .order(
-            "created_at",
-            {
-              ascending: false,
-            }
-          )
-          .limit(1)
-          .maybeSingle();
+          data: {
+            session,
+          },
+          error:
+            sessionError,
+        } =
+          await supabase.auth.getSession();
 
-        if (error) {
-          throw error;
-        }
-
-        if (!data) {
+        if (
+          sessionError ||
+          !session?.access_token
+        ) {
           setActiveTest(
             null
           );
@@ -183,102 +119,75 @@ export default function Home() {
           return;
         }
 
-        const databaseTest =
-          data as SupabaseTest;
+        /*
+         * Homepage-ul nu mai citește direct
+         * tests/questions din Supabase.
+         * Folosește API-ul server-side sigur,
+         * care nu returnează correct_answer.
+         */
+        const testResponse =
+          await fetch(
+            "/api/test/active",
+            {
+              headers: {
+                Authorization:
+                  `Bearer ${session.access_token}`,
+              },
 
-        const orderedQuestions =
-          [
-            ...(
-              databaseTest.questions ??
-              []
-            ),
-          ].sort(
-            (
-              firstQuestion,
-              secondQuestion
-            ) =>
-              firstQuestion.order_number -
-              secondQuestion.order_number
+              cache:
+                "no-store",
+            }
           );
 
-        const formattedTest: ActiveTest =
-          {
-            id:
-              databaseTest.id,
-
-            title:
-              databaseTest.title,
-
-            timePerQuestion:
-              databaseTest.time_per_question,
-
-            availableUntil:
-              databaseTest.available_until,
-
-            updatedAt:
-              databaseTest.created_at,
-
-            questions:
-              orderedQuestions.map(
-                (
-                  question
-                ) => ({
-                  id:
-                    question.id,
-
-                  question:
-                    question.question,
-
-                  answers: [
-                    question.answer_a,
-                    question.answer_b,
-                    question.answer_c,
-                    question.answer_d,
-                  ],
-
-                  correctAnswer:
-                    question.correct_answer,
-
-                  explanation:
-                    question.explanation ??
-                    "",
-
-                  law:
-                    question.law ??
-                    undefined,
-                })
-              ),
+        const testResult =
+          (await testResponse.json()) as {
+            test?: ActiveTest;
+            error?: string;
           };
+
+        if (
+          testResponse.status ===
+          404
+        ) {
+          setActiveTest(
+            null
+          );
+
+          return;
+        }
+
+        if (
+          !testResponse.ok ||
+          !testResult.test
+        ) {
+          throw new Error(
+            testResult.error ||
+              "Testul activ nu a putut fi încărcat."
+          );
+        }
+
+        const formattedTest =
+          testResult.test;
 
         setActiveTest(
           formattedTest
         );
 
         /*
-         * Dacă utilizatorul este logat,
-         * verificăm dacă a susținut deja
-         * testul.
+         * Verificăm dacă utilizatorul a
+         * susținut deja testul curent.
          */
-        const {
-          data: {
-            session,
-          },
-        } =
-          await supabase.auth.getSession();
-
-        if (
-          !session?.access_token
-        ) {
-          return;
-        }
-
         const response =
           await fetch(
             `/api/test/submit?testId=${formattedTest.id}`,
             {
               headers: {
-                Authorization: `Bearer ${session.access_token}`,
+                Authorization:
+                  `Bearer ${session.access_token}`,
               },
+
+              cache:
+                "no-store",
             }
           );
 
@@ -333,7 +242,7 @@ export default function Home() {
       }
     }
 
-    loadActiveTest();
+    void loadActiveTest();
 
     const {
       data: {
@@ -342,7 +251,7 @@ export default function Home() {
     } =
       supabase.auth.onAuthStateChange(
         () => {
-          loadActiveTest();
+          void loadActiveTest();
         }
       );
 
@@ -355,18 +264,9 @@ export default function Home() {
     activeTest?.questions
       .length ?? 0;
 
-  const timePerQuestion =
-    activeTest?.timePerQuestion ??
+  const durationMinutes =
+    activeTest?.durationMinutes ??
     0;
-
-  const estimatedMinutes =
-    activeTest !== null
-      ? Math.ceil(
-          (totalQuestions *
-            timePerQuestion) /
-            60
-        )
-      : 0;
 
   /*
    * Nota pe scala 1-10.
@@ -536,8 +436,8 @@ export default function Home() {
                           />
 
                           <TestInfo
-                            value={`${timePerQuestion}s`}
-                            label="Per întrebare"
+                            value={`${durationMinutes} min`}
+                            label="Durată"
                           />
 
                           <TestInfo
@@ -549,14 +449,6 @@ export default function Home() {
                           />
                         </div>
 
-                        <p className="mt-4 text-center text-xs text-gray-400">
-                          Durată
-                          estimată: ~
-                          {
-                            estimatedMinutes
-                          }{" "}
-                          minute
-                        </p>
 
                         {activeTest.availableUntil && (
                           <p className="mt-2 text-center text-xs text-gray-400">
