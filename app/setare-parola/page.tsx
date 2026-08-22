@@ -20,6 +20,9 @@ export default function SetPasswordPage() {
   const [isReady, setIsReady] =
     useState(false);
 
+  const [isChecking, setIsChecking] =
+    useState(true);
+
   const [isSaving, setIsSaving] =
     useState(false);
 
@@ -31,22 +34,243 @@ export default function SetPasswordPage() {
 
   useEffect(() => {
     let mounted = true;
+    let timeoutId:
+      | ReturnType<typeof setTimeout>
+      | null = null;
+
+    function showError(
+      message: string
+    ) {
+      if (!mounted) {
+        return;
+      }
+
+      setError(message);
+      setIsChecking(false);
+      setIsReady(false);
+    }
 
     async function initialize() {
-      const {
-        data: { session },
-      } =
-        await supabase.auth.getSession();
+      try {
+        /*
+         * 1. Verificăm dacă Supabase ne-a
+         * redirecționat cu o eroare.
+         */
+        const currentUrl =
+          new URL(
+            window.location.href
+          );
 
-      if (mounted && session) {
-        setIsReady(true);
+        const errorDescription =
+          currentUrl.searchParams.get(
+            "error_description"
+          );
+
+        const errorCode =
+          currentUrl.searchParams.get(
+            "error_code"
+          );
+
+        if (errorDescription) {
+          showError(
+            decodeURIComponent(
+              errorDescription.replace(
+                /\+/g,
+                " "
+              )
+            )
+          );
+          return;
+        }
+
+        /*
+         * Uneori eroarea poate fi în hash.
+         */
+        const hashParams =
+          new URLSearchParams(
+            window.location.hash.replace(
+              /^#/,
+              ""
+            )
+          );
+
+        const hashErrorDescription =
+          hashParams.get(
+            "error_description"
+          );
+
+        if (
+          hashErrorDescription
+        ) {
+          showError(
+            decodeURIComponent(
+              hashErrorDescription.replace(
+                /\+/g,
+                " "
+              )
+            )
+          );
+          return;
+        }
+
+        /*
+         * 2. PKCE flow.
+         *
+         * Dacă URL-ul conține ?code=...
+         * schimbăm explicit codul pentru sesiune.
+         */
+        const code =
+          currentUrl.searchParams.get(
+            "code"
+          );
+
+        if (code) {
+          const {
+            data,
+            error:
+              exchangeError,
+          } =
+            await supabase.auth.exchangeCodeForSession(
+              code
+            );
+
+          if (exchangeError) {
+            showError(
+              "Linkul de activare sau resetare nu mai este valid. Solicită un link nou."
+            );
+            return;
+          }
+
+          if (
+            data.session &&
+            mounted
+          ) {
+            /*
+             * Curățăm ?code= din adresă ca
+             * refresh-ul să nu încerce din nou
+             * să folosească același cod.
+             */
+            window.history.replaceState(
+              {},
+              document.title,
+              window.location.pathname
+            );
+
+            setIsReady(true);
+            setIsChecking(false);
+            return;
+          }
+        }
+
+        /*
+         * 3. Implicit flow.
+         *
+         * Dacă avem tokenurile în hash,
+         * setăm explicit sesiunea.
+         */
+        const accessToken =
+          hashParams.get(
+            "access_token"
+          );
+
+        const refreshToken =
+          hashParams.get(
+            "refresh_token"
+          );
+
+        if (
+          accessToken &&
+          refreshToken
+        ) {
+          const {
+            data,
+            error:
+              sessionError,
+          } =
+            await supabase.auth.setSession({
+              access_token:
+                accessToken,
+              refresh_token:
+                refreshToken,
+            });
+
+          if (sessionError) {
+            showError(
+              "Linkul de activare sau resetare nu mai este valid. Solicită un link nou."
+            );
+            return;
+          }
+
+          if (
+            data.session &&
+            mounted
+          ) {
+            window.history.replaceState(
+              {},
+              document.title,
+              window.location.pathname
+            );
+
+            setIsReady(true);
+            setIsChecking(false);
+            return;
+          }
+        }
+
+        /*
+         * 4. Supabase poate să fi procesat
+         * deja automat URL-ul.
+         */
+        const {
+          data: {
+            session,
+          },
+          error:
+            sessionReadError,
+        } =
+          await supabase.auth.getSession();
+
+        if (sessionReadError) {
+          showError(
+            "Sesiunea nu a putut fi verificată. Solicită un link nou."
+          );
+          return;
+        }
+
+        if (
+          session &&
+          mounted
+        ) {
+          setIsReady(true);
+          setIsChecking(false);
+          return;
+        }
+
+        /*
+         * Nu afișăm imediat eroarea pentru că
+         * onAuthStateChange poate veni puțin
+         * mai târziu pe unele browsere.
+         */
+      } catch (initializeError) {
+        console.error(
+          "Eroare la verificarea linkului:",
+          initializeError
+        );
+
+        showError(
+          "Linkul de activare sau resetare nu a putut fi verificat."
+        );
       }
     }
 
-    void initialize();
-
+    /*
+     * Listener-ul recomandat de Supabase
+     * pentru PASSWORD_RECOVERY.
+     */
     const {
-      data: { subscription },
+      data: {
+        subscription,
+      },
     } =
       supabase.auth.onAuthStateChange(
         (event, session) => {
@@ -57,16 +281,52 @@ export default function SetPasswordPage() {
           if (
             event ===
               "PASSWORD_RECOVERY" ||
-            session
+            event ===
+              "SIGNED_IN" ||
+            event ===
+              "INITIAL_SESSION"
           ) {
-            setIsReady(true);
+            if (session) {
+              setIsReady(true);
+              setIsChecking(false);
+              setError("");
+            }
           }
         }
       );
 
+    void initialize();
+
+    /*
+     * Nu mai permitem ecranului să rămână
+     * blocat la infinit.
+     */
+    timeoutId =
+      setTimeout(() => {
+        if (
+          mounted &&
+          !isReady
+        ) {
+          setIsChecking(false);
+
+          setError(
+            (currentError) =>
+              currentError ||
+              "Linkul de activare sau resetare pare expirat sau invalid. Solicită un link nou."
+          );
+        }
+      }, 8000);
+
     return () => {
       mounted = false;
+
       subscription.unsubscribe();
+
+      if (timeoutId) {
+        clearTimeout(
+          timeoutId
+        );
+      }
     };
   }, []);
 
@@ -78,7 +338,9 @@ export default function SetPasswordPage() {
     setError("");
     setSuccess(false);
 
-    if (password.length < 8) {
+    if (
+      password.length < 8
+    ) {
       setError(
         "Parola trebuie să conțină minimum 8 caractere."
       );
@@ -98,11 +360,39 @@ export default function SetPasswordPage() {
     setIsSaving(true);
 
     try {
-      const { error: updateError } =
+      /*
+       * Verificăm încă o dată sesiunea
+       * înainte de update.
+       */
+      const {
+        data: {
+          session,
+        },
+        error:
+          sessionError,
+      } =
+        await supabase.auth.getSession();
+
+      if (
+        sessionError ||
+        !session
+      ) {
+        throw new Error(
+          "Sesiunea a expirat. Solicită un link nou."
+        );
+      }
+
+      const {
+        error:
+          updateError,
+      } =
         await supabase.auth.updateUser({
           password,
+
           data: {
-            account_activated: true,
+            account_activated:
+              true,
+
             account_activated_at:
               new Date().toISOString(),
           },
@@ -165,7 +455,7 @@ export default function SetPasswordPage() {
               Intră în platformă
             </Link>
           </div>
-        ) : !isReady ? (
+        ) : isChecking ? (
           <div className="mt-8 rounded-xl border border-amber-700 bg-amber-900/20 p-5 text-center">
             <p className="text-sm text-amber-200">
               Se verifică linkul de
@@ -173,10 +463,29 @@ export default function SetPasswordPage() {
             </p>
 
             <p className="mt-2 text-xs text-gray-400">
-              Dacă această pagină rămâne
-              blocată, linkul poate fi
-              expirat sau invalid.
+              Verificarea durează doar
+              câteva secunde.
             </p>
+          </div>
+        ) : !isReady ? (
+          <div className="mt-8">
+            <div className="rounded-xl border border-red-700 bg-red-900/20 p-5 text-center">
+              <p className="font-semibold text-red-300">
+                Linkul nu poate fi folosit
+              </p>
+
+              <p className="mt-2 text-sm leading-6 text-gray-300">
+                {error ||
+                  "Linkul de activare sau resetare este expirat sau invalid."}
+              </p>
+            </div>
+
+            <Link
+              href="/resetare-parola"
+              className="mt-5 flex w-full items-center justify-center rounded-xl bg-green-600 px-5 py-3 font-semibold text-white transition hover:bg-green-700"
+            >
+              Solicită un link nou
+            </Link>
           </div>
         ) : (
           <form
