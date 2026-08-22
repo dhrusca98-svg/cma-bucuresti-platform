@@ -321,119 +321,60 @@ export default function TestPage() {
           router.replace(
             "/login?next=/test"
           );
+
           return;
         }
 
-        const nowIso =
-          new Date().toISOString();
-
         /*
-         * Nu încărcăm corect_answer,
-         * explanation sau law în browser.
+         * Testul și întrebările sunt încărcate
+         * prin API-ul nostru server-side.
+         *
+         * Browserul NU mai citește direct
+         * tabela questions din Supabase.
+         *
+         * API-ul NU returnează correct_answer.
          */
-        const {
-          data,
-          error,
-        } =
-          await supabase
-            .from("tests")
-            .select(`
-              id,
-              title,
-              duration_minutes,
-              available_until,
-              created_at,
-              questions (
-                id,
-                order_number,
-                question,
-                answer_a,
-                answer_b,
-                answer_c,
-                answer_d
-              )
-            `)
-            .eq(
-              "is_active",
-              true
-            )
-            .gt(
-              "available_until",
-              nowIso
-            )
-            .order(
-              "created_at",
-              {
-                ascending:
-                  false,
-              }
-            )
-            .limit(1)
-            .maybeSingle();
+        const testResponse =
+          await fetch(
+            "/api/test/active",
+            {
+              method: "GET",
 
-        if (error) {
-          throw error;
-        }
+              headers: {
+                Authorization:
+                  `Bearer ${session.access_token}`,
+              },
 
-        if (!data) {
+              cache:
+                "no-store",
+            }
+          );
+
+        const testResult =
+          (await testResponse.json()) as {
+            test?: ActiveTest;
+            error?: string;
+          };
+
+        if (
+          !testResponse.ok ||
+          !testResult.test
+        ) {
           throw new Error(
-            "Testul nu mai este disponibil sau perioada de susținere a expirat."
+            testResult.error ||
+              "Testul nu mai este disponibil sau perioada de susținere a expirat."
           );
         }
 
-        const formattedTest:
-          ActiveTest = {
-          id:
-            data.id,
-
-          title:
-            data.title,
-
-          durationMinutes:
-            Number(
-              data.duration_minutes ??
-                30
-            ),
-
-          questions: [
-            ...(data.questions ??
-              []),
-          ]
-            .sort(
-              (
-                firstQuestion:
-                  any,
-                secondQuestion:
-                  any
-              ) =>
-                firstQuestion.order_number -
-                secondQuestion.order_number
-            )
-            .map(
-              (
-                questionItem:
-                  any
-              ) => ({
-                id:
-                  questionItem.id,
-
-                question:
-                  questionItem.question,
-
-                answers: [
-                  questionItem.answer_a,
-                  questionItem.answer_b,
-                  questionItem.answer_c,
-                  questionItem.answer_d,
-                ],
-              })
-            ),
-        };
+        const formattedTest =
+          testResult.test;
 
         if (
-          formattedTest
-            .questions.length ===
-          0
+          !Array.isArray(
+            formattedTest.questions
+          ) ||
+          formattedTest.questions
+            .length === 0
         ) {
           throw new Error(
             "Testul activ nu conține întrebări."
@@ -444,6 +385,11 @@ export default function TestPage() {
           formattedTest
         );
 
+        /*
+         * Verificăm dacă participantul
+         * are deja un attempt sau unul
+         * aflat în desfășurare.
+         */
         const statusResponse =
           await fetch(
             `/api/test/submit?testId=${formattedTest.id}`,
@@ -475,6 +421,9 @@ export default function TestPage() {
             true
         );
 
+        /*
+         * Test deja finalizat.
+         */
         if (
           statusResult.status ===
             "completed" &&
@@ -484,9 +433,14 @@ export default function TestPage() {
             formattedTest,
             statusResult
           );
+
           return;
         }
 
+        /*
+         * Începem testul sau recuperăm
+         * attempt-ul existent.
+         */
         const startResponse =
           await fetch(
             "/api/test/submit",
@@ -542,7 +496,9 @@ export default function TestPage() {
             : "Testul nu a putut fi încărcat."
         );
       } finally {
-        setIsLoading(false);
+        setIsLoading(
+          false
+        );
       }
     }
 
