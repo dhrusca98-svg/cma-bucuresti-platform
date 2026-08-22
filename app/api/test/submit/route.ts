@@ -381,6 +381,27 @@ function formatAnswers(
   );
 }
 
+/*
+ * Cât timp testul este în desfășurare,
+ * nu trimitem către browser informații
+ * despre corectitudinea răspunsurilor.
+ * Astfel, DevTools / Network nu poate
+ * dezvălui dacă un răspuns a fost corect.
+ */
+function formatInProgressAnswers(
+  answers: AnswerRow[]
+) {
+  return answers.map(
+    (answer) => ({
+      questionId:
+        answer.question_id,
+
+      selectedAnswer:
+        answer.selected_answer,
+    })
+  );
+}
+
 async function finalizeAttempt(
   adminClient: any,
   attempt: AttemptRow,
@@ -719,15 +740,11 @@ export async function GET(
             elapsedSeconds
         ),
 
-      score:
-        answers.filter(
-          (answer) =>
-            answer.is_correct ===
-            true
-        ).length,
+      answeredCount:
+        answers.length,
 
       answers:
-        formatAnswers(
+        formatInProgressAnswers(
           answers
         ),
     });
@@ -1496,17 +1513,10 @@ export async function POST(
 
             selectedAnswer:
               existingAnswer.selected_answer,
-
-            isCorrect:
-              existingAnswer.is_correct,
           },
 
-          score:
-            answers.filter(
-              (answer) =>
-                answer.is_correct ===
-                true
-            ).length,
+          answeredCount:
+            answers.length,
 
           timeLeft:
             Math.max(
@@ -1617,11 +1627,10 @@ export async function POST(
 
           selectedAnswer:
             body.selectedAnswer,
-
-          isCorrect,
         },
 
-        score,
+        answeredCount:
+          answers.length,
 
         timeLeft:
           Math.max(
