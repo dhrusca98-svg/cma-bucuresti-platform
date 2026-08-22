@@ -4,7 +4,9 @@ function requireEnvironmentVariable(name: string) {
   const value = process.env[name];
 
   if (!value) {
-    throw new Error(`Lipsește variabila de mediu ${name}.`);
+    throw new Error(
+      `Lipsește variabila de mediu ${name}.`
+    );
   }
 
   return value;
@@ -12,34 +14,43 @@ function requireEnvironmentVariable(name: string) {
 
 export async function POST(request: Request) {
   try {
-    const supabaseUrl = requireEnvironmentVariable(
-      "NEXT_PUBLIC_SUPABASE_URL"
-    );
+    const supabaseUrl =
+      requireEnvironmentVariable(
+        "NEXT_PUBLIC_SUPABASE_URL"
+      );
 
-    const publishableKey = requireEnvironmentVariable(
-      "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"
-    );
+    const publishableKey =
+      requireEnvironmentVariable(
+        "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"
+      );
 
-    const secretKey = requireEnvironmentVariable(
-      "SUPABASE_SECRET_KEY"
-    );
+    const secretKey =
+      requireEnvironmentVariable(
+        "SUPABASE_SECRET_KEY"
+      );
 
-    const adminEmail = requireEnvironmentVariable(
-      "ADMIN_EMAIL"
-    )
-      .trim()
-      .toLowerCase();
+    const adminEmail =
+      requireEnvironmentVariable(
+        "ADMIN_EMAIL"
+      )
+        .trim()
+        .toLowerCase();
 
     const authorization =
-      request.headers.get("authorization") ?? "";
+      request.headers.get("authorization") ??
+      "";
 
-    const accessToken = authorization.startsWith("Bearer ")
-      ? authorization.slice(7)
-      : "";
+    const accessToken =
+      authorization.startsWith("Bearer ")
+        ? authorization.slice(7)
+        : "";
 
     if (!accessToken) {
       return Response.json(
-        { error: "Trebuie să fii autentificat." },
+        {
+          error:
+            "Trebuie să fii autentificat.",
+        },
         { status: 401 }
       );
     }
@@ -57,19 +68,33 @@ export async function POST(request: Request) {
     );
 
     const {
-      data: { user: currentUser },
+      data: {
+        user: currentUser,
+      },
       error: currentUserError,
-    } = await authClient.auth.getUser(accessToken);
+    } =
+      await authClient.auth.getUser(
+        accessToken
+      );
 
-    if (currentUserError || !currentUser) {
+    if (
+      currentUserError ||
+      !currentUser
+    ) {
       return Response.json(
-        { error: "Sesiunea nu este validă." },
+        {
+          error:
+            "Sesiunea nu este validă.",
+        },
         { status: 401 }
       );
     }
 
     if (
-      currentUser.email?.toLowerCase() !== adminEmail
+      currentUser.email
+        ?.trim()
+        .toLowerCase() !==
+      adminEmail
     ) {
       return Response.json(
         {
@@ -80,22 +105,33 @@ export async function POST(request: Request) {
       );
     }
 
-    const body = (await request.json()) as {
-      email?: string;
-      password?: string;
-    };
+    const body =
+      (await request.json()) as {
+        email?: string;
+        password?: string;
+      };
 
-    const email = body.email?.trim().toLowerCase() ?? "";
-    const password = body.password ?? "";
+    const email =
+      body.email
+        ?.trim()
+        .toLowerCase() ?? "";
+
+    const password =
+      body.password ?? "";
 
     if (!email) {
       return Response.json(
-        { error: "Introdu adresa de email." },
+        {
+          error:
+            "Introdu adresa de email.",
+        },
         { status: 400 }
       );
     }
 
-    if (password.length < 8) {
+    if (
+      password.length < 8
+    ) {
       return Response.json(
         {
           error:
@@ -120,18 +156,30 @@ export async function POST(request: Request) {
     const {
       data: { users },
       error: listUsersError,
-    } = await adminClient.auth.admin.listUsers({
-      page: 1,
-      perPage: 1000,
-    });
+    } =
+      await adminClient.auth.admin.listUsers(
+        {
+          page: 1,
+          perPage: 1000,
+        }
+      );
 
-    if (listUsersError) {
-      throw new Error(listUsersError.message);
+    if (
+      listUsersError
+    ) {
+      throw new Error(
+        listUsersError.message
+      );
     }
 
-    const targetUser = users.find(
-      (user) => user.email?.toLowerCase() === email
-    );
+    const targetUser =
+      users.find(
+        (user) =>
+          user.email
+            ?.trim()
+            .toLowerCase() ===
+          email
+      );
 
     if (!targetUser) {
       return Response.json(
@@ -143,7 +191,10 @@ export async function POST(request: Request) {
       );
     }
 
-    const { error: updatePasswordError } =
+    const {
+      error:
+        updatePasswordError,
+    } =
       await adminClient.auth.admin.updateUserById(
         targetUser.id,
         {
@@ -152,17 +203,31 @@ export async function POST(request: Request) {
         }
       );
 
-    if (updatePasswordError) {
-      throw new Error(updatePasswordError.message);
+    if (
+      updatePasswordError
+    ) {
+      throw new Error(
+        updatePasswordError.message
+      );
     }
 
-    const { error: participantUpdateError } =
+    const {
+      error:
+        participantUpdateError,
+    } =
       await adminClient
         .from("participants")
-        .update({ active: true })
-        .eq("auth_user_id", targetUser.id);
+        .update({
+          active: true,
+        })
+        .eq(
+          "auth_user_id",
+          targetUser.id
+        );
 
-    if (participantUpdateError) {
+    if (
+      participantUpdateError
+    ) {
       throw new Error(
         participantUpdateError.message
       );

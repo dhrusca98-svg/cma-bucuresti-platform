@@ -127,7 +127,7 @@ export async function GET(request: Request) {
     }
 
     if (
-      user.email?.toLowerCase() !==
+      user.email?.trim().toLowerCase() !==
       adminEmail
     ) {
       return Response.json(
@@ -199,6 +199,7 @@ export async function GET(request: Request) {
         .order("first_name", {
           ascending: true,
         }),
+
       adminClient
         .from("attempts")
         .select(`
@@ -228,6 +229,7 @@ export async function GET(request: Request) {
         .order("created_at", {
           ascending: true,
         }),
+
       adminClient
         .from("questions")
         .select("id", {
@@ -276,26 +278,35 @@ export async function GET(request: Request) {
 
         return {
           rank: index + 1,
+
           attemptId:
             attempt.id,
+
           participantId:
             attempt.participant_id,
+
           fullName: participant
             ? `${participant.last_name} ${participant.first_name}`.trim()
             : "Participant necunoscut",
+
           email:
             participant?.email ?? "",
+
           score:
             attempt.score,
+
           totalQuestions:
             attempt.total_questions,
+
           grade:
             calculateGrade(
               attempt.score,
               attempt.total_questions
             ),
+
           durationSeconds:
             attempt.duration_seconds,
+
           completedAt:
             attempt.created_at,
         };
@@ -322,8 +333,10 @@ export async function GET(request: Request) {
           (participant) => ({
             participantId:
               participant.id,
+
             fullName:
               `${participant.last_name} ${participant.first_name}`.trim(),
+
             email:
               participant.email ?? "",
           })
@@ -388,6 +401,7 @@ export async function GET(request: Request) {
       possibleGrades.map(
         (grade) => ({
           grade,
+
           count:
             distributionMap.get(
               grade
@@ -403,38 +417,53 @@ export async function GET(request: Request) {
 
     return Response.json({
       activeTest: {
-        id: activeTest.id,
+        id:
+          activeTest.id,
+
         title:
           activeTest.title,
+
         timePerQuestion:
           activeTest.time_per_question,
+
         createdAt:
           activeTest.created_at,
+
         questionCount,
       },
+
       stats: {
         activeParticipants:
           activeCount,
+
         completed:
           completedCount,
+
         missing:
           Math.max(
             activeCount -
               completedCount,
             0
           ),
+
         participationPercentage:
           activeCount > 0
             ? (completedCount /
                 activeCount) *
               100
             : 0,
+
         averageGrade,
+
         maximumGrade,
+
         minimumGrade,
       },
+
       results,
+
       missingParticipants,
+
       gradeDistribution,
     });
   } catch (error) {
