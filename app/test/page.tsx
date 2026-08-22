@@ -1281,7 +1281,7 @@ export default function TestPage() {
       <div className="absolute inset-0 bg-black/60" />
 
       <div className="relative z-10 mx-auto max-w-4xl">
-        <div className="sticky top-3 z-20 rounded-2xl border border-white/20 bg-white/95 p-5 shadow-xl backdrop-blur-md sm:p-6">
+        <div className="rounded-2xl border border-white/20 bg-white/95 p-5 shadow-xl backdrop-blur-md sm:p-6">
           {isAdminPreview && (
             <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-700">
               Mod previzualizare administrator. Rezultatul nu va fi salvat.
