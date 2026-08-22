@@ -4,6 +4,7 @@ import Link from "next/link";
 import {
   ChangeEvent,
   useEffect,
+  useMemo,
   useState,
 } from "react";
 import * as XLSX from "xlsx";
@@ -137,8 +138,69 @@ export default function ParticipantsAdminPage() {
   const [sendResult, setSendResult] =
     useState<SendEmailResult | null>(null);
 
-  const [activationFilter, setActivationFilter] =
-    useState<"all" | "not_sent" | "sent" | "activated">("all");
+  const [nameSearch, setNameSearch] = useState("");
+
+  const [emailSearch, setEmailSearch] = useState("");
+
+  const [accountStatusFilter, setAccountStatusFilter] =
+    useState<"all" | "activated" | "not_activated" | "no_account">(
+      "all"
+    );
+
+  const [activationEmailFilter, setActivationEmailFilter] =
+    useState<"all" | "sent" | "not_sent">("all");
+
+  const filteredActivationUsers = useMemo(() => {
+    const normalizedNameSearch = normalizeHeader(nameSearch);
+    const normalizedEmailSearch = emailSearch.trim().toLowerCase();
+
+    return activationUsers.filter((user) => {
+      const matchesName =
+        !normalizedNameSearch ||
+        normalizeHeader(user.fullName).includes(normalizedNameSearch);
+
+      const matchesEmail =
+        !normalizedEmailSearch ||
+        user.email.toLowerCase().includes(normalizedEmailSearch);
+
+      const matchesAccountStatus =
+        accountStatusFilter === "all" ||
+        (accountStatusFilter === "activated" &&
+          user.hasAccount &&
+          user.activated) ||
+        (accountStatusFilter === "not_activated" &&
+          user.hasAccount &&
+          !user.activated) ||
+        (accountStatusFilter === "no_account" && !user.hasAccount);
+
+      const matchesActivationEmail =
+        activationEmailFilter === "all" ||
+        (activationEmailFilter === "sent" &&
+          user.activationEmailSentCount > 0) ||
+        (activationEmailFilter === "not_sent" &&
+          user.hasAccount &&
+          user.activationEmailSentCount === 0);
+
+      return (
+        matchesName &&
+        matchesEmail &&
+        matchesAccountStatus &&
+        matchesActivationEmail
+      );
+    });
+  }, [
+    activationUsers,
+    nameSearch,
+    emailSearch,
+    accountStatusFilter,
+    activationEmailFilter,
+  ]);
+
+  const hasActiveFilters =
+    nameSearch.trim() !== "" ||
+    emailSearch.trim() !== "" ||
+    accountStatusFilter !== "all" ||
+    activationEmailFilter !== "all";
 
   async function loadActivationUsers() {
     setIsLoadingActivations(true);
@@ -232,6 +294,21 @@ export default function ParticipantsAdminPage() {
         )
         .map((user) => user.participantId)
     );
+  }
+
+  function selectFilteredEligible() {
+    const filteredIds = filteredActivationUsers
+      .filter((user) => user.hasAccount && !user.activated)
+      .map((user) => user.participantId);
+
+    setSelectedActivationIds(filteredIds);
+  }
+
+  function resetActivationFilters() {
+    setNameSearch("");
+    setEmailSearch("");
+    setAccountStatusFilter("all");
+    setActivationEmailFilter("all");
   }
 
   async function sendAccountEmail(options: {
@@ -653,33 +730,7 @@ export default function ParticipantsAdminPage() {
                 </div>
               </div>
 
-              <div className="mt-6 flex flex-wrap gap-2">
-            {[
-              ["all", "Toți"],
-              ["not_sent", "Activare netrimisă"],
-              ["sent", "Activare trimisă"],
-              ["activated", "Activați"],
-            ].map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() =>
-                  setActivationFilter(
-                    value as "all" | "not_sent" | "sent" | "activated"
-                  )
-                }
-                className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
-                  activationFilter === value
-                    ? "bg-gray-900 text-white"
-                    : "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          <div className="mt-6 overflow-hidden rounded-xl border border-gray-200">
+              <div className="mt-6 overflow-hidden rounded-xl border border-gray-200">
                 <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
                   <p className="text-sm font-semibold text-gray-700">
                     Verificare — primele{" "}
@@ -983,7 +1034,110 @@ export default function ParticipantsAdminPage() {
             </div>
           )}
 
-          <div className="mt-6 overflow-hidden rounded-xl border border-gray-200">
+          <div className="mt-6 rounded-2xl border border-gray-200 bg-gray-50 p-4 sm:p-5">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <div>
+                <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Arbitru
+                </label>
+                <input
+                  type="text"
+                  value={nameSearch}
+                  onChange={(event) => setNameSearch(event.target.value)}
+                  placeholder="Caută după nume..."
+                  className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-green-500 focus:ring-2 focus:ring-green-100"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Email
+                </label>
+                <input
+                  type="text"
+                  value={emailSearch}
+                  onChange={(event) => setEmailSearch(event.target.value)}
+                  placeholder="Caută după email..."
+                  className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-green-500 focus:ring-2 focus:ring-green-100"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Status cont
+                </label>
+                <select
+                  value={accountStatusFilter}
+                  onChange={(event) =>
+                    setAccountStatusFilter(
+                      event.target.value as
+                        | "all"
+                        | "activated"
+                        | "not_activated"
+                        | "no_account"
+                    )
+                  }
+                  className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-green-500 focus:ring-2 focus:ring-green-100"
+                >
+                  <option value="all">Toate</option>
+                  <option value="activated">Activat</option>
+                  <option value="not_activated">Neactivat</option>
+                  <option value="no_account">Fără cont</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Email activare
+                </label>
+                <select
+                  value={activationEmailFilter}
+                  onChange={(event) =>
+                    setActivationEmailFilter(
+                      event.target.value as "all" | "sent" | "not_sent"
+                    )
+                  }
+                  className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-green-500 focus:ring-2 focus:ring-green-100"
+                >
+                  <option value="all">Toate</option>
+                  <option value="sent">Trimis</option>
+                  <option value="not_sent">Netrimis</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-gray-600">
+                Afișați: <span className="font-bold text-gray-900">{filteredActivationUsers.length}</span> din {activationUsers.length}
+              </p>
+
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={selectFilteredEligible}
+                  disabled={
+                    filteredActivationUsers.filter(
+                      (user) => user.hasAccount && !user.activated
+                    ).length === 0
+                  }
+                  className="rounded-lg border border-green-600 bg-white px-4 py-2 text-sm font-semibold text-green-700 transition hover:bg-green-50 disabled:cursor-not-allowed disabled:border-gray-300 disabled:text-gray-400"
+                >
+                  Selectează eligibilii afișați
+                </button>
+
+                <button
+                  type="button"
+                  onClick={resetActivationFilters}
+                  disabled={!hasActiveFilters}
+                  className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:text-gray-400"
+                >
+                  Reset filtre
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-4 overflow-hidden rounded-xl border border-gray-200">
             <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
               <p className="text-sm font-semibold text-gray-700">
                 Conturi participanți
@@ -1025,20 +1179,18 @@ export default function ParticipantsAdminPage() {
                   </thead>
 
                   <tbody className="divide-y divide-gray-100">
-                    {activationUsers
-                      .filter((user) => {
-                        if (activationFilter === "activated") {
-                          return user.activated;
-                        }
-                        if (activationFilter === "not_sent") {
-                          return user.hasAccount && !user.activated && user.activationEmailSentCount === 0;
-                        }
-                        if (activationFilter === "sent") {
-                          return user.hasAccount && !user.activated && user.activationEmailSentCount > 0;
-                        }
-                        return true;
-                      })
-                      .map((user) => {
+                    {filteredActivationUsers.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={6}
+                          className="px-4 py-10 text-center text-sm text-gray-500"
+                        >
+                          Nu există participanți care să corespundă filtrelor selectate.
+                        </td>
+                      </tr>
+                    )}
+
+                    {filteredActivationUsers.map((user) => {
                       const canActivate =
                         user.hasAccount &&
                         !user.activated;
