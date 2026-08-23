@@ -119,8 +119,15 @@ export default function ForgotPasswordPage() {
       const normalizedEmail =
         email.trim().toLowerCase();
 
+      const appUrl =
+        (
+          process.env
+            .NEXT_PUBLIC_APP_URL ??
+          "https://arbitraj.amfb.ro"
+        ).replace(/\/+$/, "");
+
       const redirectTo =
-        `${window.location.origin}/setare-parola`;
+        `${appUrl}/setare-parola`;
 
       console.log(
         "Trimitere resetare parolă:",

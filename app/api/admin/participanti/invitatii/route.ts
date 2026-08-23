@@ -600,6 +600,7 @@ export async function POST(
 
         fullName:
           `${participant.last_name} ${participant.first_name}`.trim(),
+
         email,
 
         activationEmailSentCount:
@@ -643,13 +644,13 @@ export async function POST(
         }
       );
 
-    const origin =
-      new URL(
-        request.url
-      ).origin;
+    const appUrl =
+      requireEnvironmentVariable(
+        "APP_URL"
+      ).replace(/\/+$/, "");
 
     const redirectTo =
-      `${origin}/setare-parola`;
+      `${appUrl}/setare-parola`;
 
     let sent = 0;
     let failed = 0;
@@ -685,18 +686,28 @@ export async function POST(
       sent += 1;
 
       if (mode === "activation") {
-        const { error: updateTrackingError } =
+        const {
+          error:
+            updateTrackingError,
+        } =
           await adminClient
             .from("participants")
             .update({
               activation_email_sent_at:
                 new Date().toISOString(),
-              activation_email_sent_count:
-                recipient.activationEmailSentCount + 1,
-            })
-            .eq("id", recipient.participantId);
 
-        if (updateTrackingError) {
+              activation_email_sent_count:
+                recipient.activationEmailSentCount +
+                1,
+            })
+            .eq(
+              "id",
+              recipient.participantId
+            );
+
+        if (
+          updateTrackingError
+        ) {
           errors.push(
             `${recipient.fullName} (${recipient.email}): email trimis, dar evidența activării nu a putut fi actualizată (${updateTrackingError.message}).`
           );
@@ -709,6 +720,7 @@ export async function POST(
       sent,
       failed,
       skipped,
+
       errors:
         errors.slice(0, 20),
 
