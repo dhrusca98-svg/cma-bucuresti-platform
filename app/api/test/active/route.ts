@@ -128,12 +128,6 @@ export async function GET(
         .toLowerCase() ===
       adminEmail;
 
-    /*
-     * Pentru utilizatorii obișnuiți verificăm
-     * că acel cont este asociat unui participant
-     * activ. Administratorul poate folosi în
-     * continuare modul Preview.
-     */
     if (!isAdmin) {
       const {
         data: participant,
@@ -190,16 +184,6 @@ export async function GET(
     const nowIso =
       new Date().toISOString();
 
-    /*
-     * IMPORTANT:
-     * Această rută returnează DOAR metadatele
-     * testului. Nu returnează întrebările.
-     *
-     * Întrebările sunt trimise de server numai
-     * după POST /api/test/submit cu action=start.
-     * Pentru participant, în acel moment există
-     * deja attempt-ul și timerul server-side a pornit.
-     */
     const {
       data: test,
       error: testError,
@@ -249,6 +233,43 @@ export async function GET(
       );
     }
 
+    /*
+     * Numărăm întrebările fără să trimitem
+     * textul întrebărilor sau răspunsurile.
+     *
+     * Homepage-ul poate afișa "20 întrebări"
+     * fără să primească efectiv conținutul testului.
+     */
+    const {
+      count:
+        questionCount,
+      error:
+        questionCountError,
+    } =
+      await adminClient
+        .from("questions")
+        .select(
+          "id",
+          {
+            count:
+              "exact",
+            head:
+              true,
+          }
+        )
+        .eq(
+          "test_id",
+          test.id
+        );
+
+    if (
+      questionCountError
+    ) {
+      throw new Error(
+        questionCountError.message
+      );
+    }
+
     return Response.json({
       test: {
         id:
@@ -268,6 +289,9 @@ export async function GET(
 
         createdAt:
           test.created_at,
+
+        questionCount:
+          questionCount ?? 0,
       },
     });
   } catch (error) {

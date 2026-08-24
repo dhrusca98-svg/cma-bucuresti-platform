@@ -17,12 +17,7 @@ interface ActiveTest {
   availableUntil: string | null;
   createdAt?: string;
 
-  questions: {
-    id: string;
-    orderNumber: number;
-    question: string;
-    answers: string[];
-  }[];
+  questionCount: number;
 }
 
 interface ExistingAttempt {
@@ -32,7 +27,6 @@ interface ExistingAttempt {
   durationSeconds: number | null;
   createdAt: string;
 }
-
 
 export default function Home() {
   const [
@@ -93,7 +87,9 @@ export default function Home() {
   useEffect(() => {
     async function loadActiveTest() {
       setIsLoading(true);
+
       setLoadError("");
+
       setExistingAttempt(
         null
       );
@@ -120,10 +116,11 @@ export default function Home() {
         }
 
         /*
-         * Homepage-ul nu mai citește direct
-         * tests/questions din Supabase.
-         * Folosește API-ul server-side sigur,
-         * care nu returnează correct_answer.
+         * Homepage-ul primește doar metadata
+         * testului + numărul întrebărilor.
+         *
+         * NU primește întrebările și NU primește
+         * răspunsurile corecte.
          */
         const testResponse =
           await fetch(
@@ -261,8 +258,8 @@ export default function Home() {
   }, []);
 
   const totalQuestions =
-    activeTest?.questions
-      .length ?? 0;
+    activeTest?.questionCount ??
+    0;
 
   const durationMinutes =
     activeTest?.durationMinutes ??
@@ -270,9 +267,6 @@ export default function Home() {
 
   /*
    * Nota pe scala 1-10.
-   *
-   * Exemplu:
-   * 6/20 = 3,00
    */
   const grade =
     existingAttempt &&
@@ -292,12 +286,6 @@ export default function Home() {
         )
       : null;
 
-  /*
-   * Dacă countdown-ul ajunge
-   * la zero în timp ce utilizatorul
-   * stă pe homepage, îl tratăm
-   * imediat ca expirat.
-   */
   const testExpired =
     activeTest
       ?.availableUntil
@@ -324,46 +312,42 @@ export default function Home() {
 
         <div className="relative z-10 mx-auto w-full max-w-7xl px-5 py-12 sm:px-8 lg:px-12">
           <div className="grid items-center gap-10 lg:grid-cols-[1.15fr_0.85fr]">
+
             {/* LEFT */}
             <section className="max-w-3xl text-center lg:text-left">
               <p className="text-sm font-bold uppercase tracking-[0.18em] text-green-400">
-                Platformă oficială
-                de testare
+                Platformă oficială de testare
               </p>
 
               <h1 className="mt-5 text-4xl font-bold leading-tight text-white sm:text-5xl lg:text-6xl">
-                Comisia
-                Municipală
+                Comisia Municipală
 
                 <span className="block text-green-500">
-                  a Arbitrilor
-                  București
+                  a Arbitrilor București
                 </span>
               </h1>
 
               <p className="mx-auto mt-6 max-w-2xl text-base leading-7 text-gray-300 sm:text-lg lg:mx-0">
-                Testare teoretică
-                pentru arbitri.
+                Testare teoretică pentru arbitri.
               </p>
             </section>
 
             {/* RIGHT CARD */}
             <section className="mx-auto w-full max-w-md lg:mx-0 lg:ml-auto">
               <div className="rounded-3xl border border-white/15 bg-black/45 p-6 shadow-2xl backdrop-blur-md sm:p-8">
+
                 <p className="text-sm font-bold uppercase tracking-[0.16em] text-green-400">
                   Test activ
                 </p>
 
                 {isLoading ? (
                   <p className="mt-6 text-gray-300">
-                    Se încarcă
-                    testul...
+                    Se încarcă testul...
                   </p>
                 ) : loadError ? (
                   <>
                     <h2 className="mt-3 text-2xl font-bold text-white">
-                      Eroare de
-                      conexiune
+                      Eroare de conexiune
                     </h2>
 
                     <p className="mt-3 text-gray-300">
@@ -374,17 +358,13 @@ export default function Home() {
                   !testExpired ? (
                   <>
                     <h2 className="mt-3 text-2xl font-bold text-white sm:text-3xl">
-                      {
-                        activeTest.title
-                      }
+                      {activeTest.title}
                     </h2>
 
                     {existingAttempt ? (
                       <>
                         <p className="mt-4 text-sm leading-6 text-gray-300">
-                          Ai susținut
-                          deja acest
-                          test.
+                          Ai susținut deja acest test.
                         </p>
 
                         <div className="mt-6 grid grid-cols-3 gap-3">
@@ -411,8 +391,7 @@ export default function Home() {
 
                         {activeTest.availableUntil && (
                           <p className="mt-4 text-center text-xs text-gray-400">
-                            Disponibil
-                            până la{" "}
+                            Disponibil până la{" "}
                             {formatDeadline(
                               activeTest.availableUntil
                             )}
@@ -423,15 +402,16 @@ export default function Home() {
                           href="/test"
                           className="mt-8 flex w-full items-center justify-center rounded-xl bg-green-600 px-6 py-4 text-lg font-bold text-white transition hover:bg-green-500"
                         >
-                          Vezi
-                          rezultatul
+                          Vezi rezultatul
                         </Link>
                       </>
                     ) : (
                       <>
                         <div className="mt-7 grid grid-cols-3 gap-3">
                           <TestInfo
-                            value={totalQuestions.toString()}
+                            value={
+                              totalQuestions.toString()
+                            }
                             label="Întrebări"
                           />
 
@@ -449,11 +429,9 @@ export default function Home() {
                           />
                         </div>
 
-
                         {activeTest.availableUntil && (
                           <p className="mt-2 text-center text-xs text-gray-400">
-                            Disponibil
-                            până la{" "}
+                            Disponibil până la{" "}
                             {formatDeadline(
                               activeTest.availableUntil
                             )}
@@ -464,8 +442,7 @@ export default function Home() {
                           href="/test"
                           className="mt-8 flex w-full items-center justify-center rounded-xl bg-green-600 px-6 py-4 text-lg font-bold text-white transition hover:bg-green-500"
                         >
-                          Începe
-                          testul
+                          Începe testul
                         </Link>
                       </>
                     )}
@@ -473,19 +450,15 @@ export default function Home() {
                 ) : (
                   <>
                     <h2 className="mt-3 text-2xl font-bold text-white">
-                      Niciun test
-                      disponibil
+                      Niciun test disponibil
                     </h2>
 
                     <p className="mt-3 text-gray-300">
-                      Momentan nu
-                      există un test
-                      disponibil
-                      pentru
-                      susținere.
+                      Momentan nu există un test disponibil pentru susținere.
                     </p>
                   </>
                 )}
+
               </div>
             </section>
           </div>
@@ -527,6 +500,7 @@ function formatGrade(
     {
       minimumFractionDigits:
         2,
+
       maximumFractionDigits:
         2,
     }
