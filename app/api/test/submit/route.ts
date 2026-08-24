@@ -463,80 +463,34 @@ async function saveOrUpdateAnswer(
     question.correct_answer;
 
   const {
-    data: existingAnswer,
-    error: existingAnswerError,
+    error: upsertError,
   } =
     await adminClient
       .from("answers")
-      .select(
-        "question_id"
-      )
-      .eq(
-        "attempt_id",
-        attemptId
-      )
-      .eq(
-        "question_id",
-        questionId
-      )
-      .maybeSingle();
-
-  if (
-    existingAnswerError
-  ) {
-    throw new Error(
-      existingAnswerError.message
-    );
-  }
-
-  if (existingAnswer) {
-    const {
-      error: updateError,
-    } =
-      await adminClient
-        .from("answers")
-        .update({
-          selected_answer:
-            selectedAnswer,
-          is_correct:
-            isCorrect,
-        })
-        .eq(
-          "attempt_id",
-          attemptId
-        )
-        .eq(
-          "question_id",
-          questionId
-        );
-
-    if (updateError) {
-      throw new Error(
-        updateError.message
-      );
-    }
-  } else {
-    const {
-      error: insertError,
-    } =
-      await adminClient
-        .from("answers")
-        .insert({
+      .upsert(
+        {
           attempt_id:
             attemptId,
+
           question_id:
             questionId,
+
           selected_answer:
             selectedAnswer,
+
           is_correct:
             isCorrect,
-        });
-
-    if (insertError) {
-      throw new Error(
-        insertError.message
+        },
+        {
+          onConflict:
+            "attempt_id,question_id",
+        }
       );
-    }
+
+  if (upsertError) {
+    throw new Error(
+      upsertError.message
+    );
   }
 
   return {
