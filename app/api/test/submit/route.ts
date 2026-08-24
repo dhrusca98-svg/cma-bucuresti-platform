@@ -32,6 +32,12 @@ interface FinalAnswerInput {
   selectedAnswer: number;
 }
 
+interface PublicQuestion {
+  id: string;
+  question: string;
+  answers: string[];
+}
+
 function requireEnvironmentVariable(name: string) {
   const value = process.env[name];
 
@@ -255,6 +261,56 @@ async function getTest(
   return data as
     | AvailableTestRow
     | null;
+}
+
+async function getPublicQuestions(
+  adminClient: any,
+  testId: string
+): Promise<PublicQuestion[]> {
+  const {
+    data,
+    error,
+  } = await adminClient
+    .from("questions")
+    .select(`
+      id,
+      order_number,
+      question,
+      answer_a,
+      answer_b,
+      answer_c,
+      answer_d
+    `)
+    .eq(
+      "test_id",
+      testId
+    )
+    .order(
+      "order_number",
+      {
+        ascending: true,
+      }
+    );
+
+  if (error) {
+    throw new Error(
+      error.message
+    );
+  }
+
+  return (data ?? []).map(
+    (questionItem: any) => ({
+      id: questionItem.id,
+      question:
+        questionItem.question,
+      answers: [
+        questionItem.answer_a,
+        questionItem.answer_b,
+        questionItem.answer_c,
+        questionItem.answer_d,
+      ],
+    })
+  );
 }
 
 function testCanBeStarted(
@@ -767,17 +823,27 @@ export async function GET(
       attempt.status ===
       "completed"
     ) {
-      const answers =
-        await getAttemptAnswers(
+      const [
+        answers,
+        questions,
+      ] = await Promise.all([
+        getAttemptAnswers(
           context.adminClient,
           attempt.id
-        );
+        ),
+        getPublicQuestions(
+          context.adminClient,
+          testId
+        ),
+      ]);
 
       return Response.json({
         attempted: true,
         isAdmin: false,
         status:
           "completed",
+
+        questions,
 
         answers:
           formatAnswers(
@@ -831,12 +897,20 @@ export async function GET(
           test
         );
 
+      const questions =
+        await getPublicQuestions(
+          context.adminClient,
+          testId
+        );
+
       return Response.json({
         attempted: true,
         isAdmin: false,
         status:
           "completed",
         expired: true,
+
+        questions,
 
         answers:
           formatAnswers(
@@ -997,11 +1071,29 @@ export async function POST(
         body.action ===
         "start"
       ) {
+        const questions =
+          await getPublicQuestions(
+            context.adminClient,
+            body.testId
+          );
+
+        if (questions.length === 0) {
+          return Response.json(
+            {
+              error:
+                "Testul nu conține întrebări.",
+            },
+            { status: 400 }
+          );
+        }
+
         return Response.json({
           success: true,
           isAdmin: true,
           status:
             "preview",
+
+          questions,
 
           durationSeconds:
             getDurationSeconds(
@@ -1275,11 +1367,19 @@ export async function POST(
         attempt.status ===
         "completed"
       ) {
-        const answers =
-          await getAttemptAnswers(
+        const [
+          answers,
+          questions,
+        ] = await Promise.all([
+          getAttemptAnswers(
             context.adminClient,
             attempt.id
-          );
+          ),
+          getPublicQuestions(
+            context.adminClient,
+            body.testId
+          ),
+        ]);
 
         return Response.json(
           {
@@ -1291,6 +1391,8 @@ export async function POST(
 
             status:
               "completed",
+
+            questions,
 
             answers:
               formatAnswers(
@@ -1346,6 +1448,12 @@ export async function POST(
             test
           );
 
+        const questions =
+          await getPublicQuestions(
+            context.adminClient,
+            body.testId
+          );
+
         return Response.json({
           success: true,
 
@@ -1354,6 +1462,8 @@ export async function POST(
 
           expired:
             true,
+
+          questions,
 
           answers:
             formatAnswers(
@@ -1383,17 +1493,37 @@ export async function POST(
         });
       }
 
-      const answers =
-        await getAttemptAnswers(
+      const [
+        answers,
+        questions,
+      ] = await Promise.all([
+        getAttemptAnswers(
           context.adminClient,
           attempt.id
+        ),
+        getPublicQuestions(
+          context.adminClient,
+          body.testId
+        ),
+      ]);
+
+      if (questions.length === 0) {
+        return Response.json(
+          {
+            error:
+              "Testul nu conține întrebări.",
+          },
+          { status: 400 }
         );
+      }
 
       return Response.json({
         success: true,
 
         status:
           "in_progress",
+
+        questions,
 
         attemptId:
           attempt.id,

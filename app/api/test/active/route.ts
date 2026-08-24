@@ -33,6 +33,13 @@ export async function GET(
         "SUPABASE_SECRET_KEY"
       );
 
+    const adminEmail =
+      requireEnvironmentVariable(
+        "ADMIN_EMAIL"
+      )
+        .trim()
+        .toLowerCase();
+
     const authorization =
       request.headers.get(
         "authorization"
@@ -115,12 +122,83 @@ export async function GET(
         }
       );
 
+    const isAdmin =
+      user.email
+        ?.trim()
+        .toLowerCase() ===
+      adminEmail;
+
+    /*
+     * Pentru utilizatorii obișnuiți verificăm
+     * că acel cont este asociat unui participant
+     * activ. Administratorul poate folosi în
+     * continuare modul Preview.
+     */
+    if (!isAdmin) {
+      const {
+        data: participant,
+        error:
+          participantError,
+      } =
+        await adminClient
+          .from("participants")
+          .select(
+            "id, active"
+          )
+          .eq(
+            "auth_user_id",
+            user.id
+          )
+          .maybeSingle();
+
+      if (
+        participantError
+      ) {
+        throw new Error(
+          participantError.message
+        );
+      }
+
+      if (!participant) {
+        return Response.json(
+          {
+            error:
+              "Contul nu este asociat unui participant.",
+          },
+          {
+            status: 403,
+          }
+        );
+      }
+
+      if (
+        participant.active !==
+        true
+      ) {
+        return Response.json(
+          {
+            error:
+              "Contul participantului este inactiv.",
+          },
+          {
+            status: 403,
+          }
+        );
+      }
+    }
+
     const nowIso =
       new Date().toISOString();
 
     /*
-     * Luăm cel mai recent test activ
-     * și încă disponibil.
+     * IMPORTANT:
+     * Această rută returnează DOAR metadatele
+     * testului. Nu returnează întrebările.
+     *
+     * Întrebările sunt trimise de server numai
+     * după POST /api/test/submit cu action=start.
+     * Pentru participant, în acel moment există
+     * deja attempt-ul și timerul server-side a pornit.
      */
     const {
       data: test,
@@ -171,85 +249,6 @@ export async function GET(
       );
     }
 
-    /*
-     * Luăm întrebările separat.
-     * IMPORTANT:
-     * NU selectăm correct_answer.
-     */
-    const {
-      data: questions,
-      error: questionsError,
-    } =
-      await adminClient
-        .from("questions")
-        .select(`
-          id,
-          order_number,
-          question,
-          answer_a,
-          answer_b,
-          answer_c,
-          answer_d
-        `)
-        .eq(
-          "test_id",
-          test.id
-        )
-        .order(
-          "order_number",
-          {
-            ascending:
-              true,
-          }
-        );
-
-    if (
-      questionsError
-    ) {
-      throw new Error(
-        questionsError.message
-      );
-    }
-
-    if (
-      !questions ||
-      questions.length ===
-        0
-    ) {
-      return Response.json(
-        {
-          error:
-            "Testul activ nu conține întrebări.",
-        },
-        {
-          status: 400,
-        }
-      );
-    }
-
-    const formattedQuestions =
-      questions.map(
-        (
-          questionItem
-        ) => ({
-          id:
-            questionItem.id,
-
-          orderNumber:
-            questionItem.order_number,
-
-          question:
-            questionItem.question,
-
-          answers: [
-            questionItem.answer_a,
-            questionItem.answer_b,
-            questionItem.answer_c,
-            questionItem.answer_d,
-          ],
-        })
-      );
-
     return Response.json({
       test: {
         id:
@@ -269,9 +268,6 @@ export async function GET(
 
         createdAt:
           test.created_at,
-
-        questions:
-          formattedQuestions,
       },
     });
   } catch (error) {

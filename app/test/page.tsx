@@ -19,10 +19,15 @@ interface TestQuestion {
   answers: string[];
 }
 
-interface ActiveTest {
+interface ActiveTestMeta {
   id: string;
   title: string;
   durationMinutes: number;
+  availableUntil?: string;
+  createdAt?: string;
+}
+
+interface ActiveTest extends ActiveTestMeta {
   questions: TestQuestion[];
 }
 
@@ -55,6 +60,7 @@ interface ProgressResponse {
   durationSeconds?: number;
   timeLeft?: number;
   answeredCount?: number;
+  questions?: TestQuestion[];
   answers?: RecordedAnswer[];
   attempt?: ExistingAttempt;
   completed?: boolean;
@@ -352,7 +358,7 @@ export default function TestPage() {
 
         const testResult =
           (await testResponse.json()) as {
-            test?: ActiveTest;
+            test?: ActiveTestMeta;
             error?: string;
           };
 
@@ -366,33 +372,17 @@ export default function TestPage() {
           );
         }
 
-        const formattedTest =
+        const testMeta =
           testResult.test;
 
-        if (
-          !Array.isArray(
-            formattedTest.questions
-          ) ||
-          formattedTest.questions
-            .length === 0
-        ) {
-          throw new Error(
-            "Testul activ nu conține întrebări."
-          );
-        }
-
-        setActiveTest(
-          formattedTest
-        );
-
         /*
-         * Verificăm dacă participantul
-         * are deja un attempt sau unul
-         * aflat în desfășurare.
+         * IMPORTANT:
+         * /api/test/active nu trimite întrebările.
+         * Verificăm mai întâi starea tentativei.
          */
         const statusResponse =
           await fetch(
-            `/api/test/submit?testId=${formattedTest.id}`,
+            `/api/test/submit?testId=${testMeta.id}`,
             {
               headers: {
                 Authorization:
@@ -422,15 +412,29 @@ export default function TestPage() {
         );
 
         /*
-         * Test deja finalizat.
+         * Test deja finalizat. În acest caz
+         * serverul poate returna întrebările
+         * doar pentru afișarea rezultatului.
          */
         if (
           statusResult.status ===
             "completed" &&
           statusResult.attempt
         ) {
+          const completedTest:
+            ActiveTest = {
+            ...testMeta,
+            questions:
+              statusResult.questions ??
+              [],
+          };
+
+          setActiveTest(
+            completedTest
+          );
+
           applyProgress(
-            formattedTest,
+            completedTest,
             statusResult
           );
 
@@ -438,8 +442,11 @@ export default function TestPage() {
         }
 
         /*
-         * Începem testul sau recuperăm
-         * attempt-ul existent.
+         * Acesta este momentul în care participantul
+         * primește întrebările. Pentru participant,
+         * serverul creează/recuperează attempt-ul și
+         * timerul server-side este deja pornit înainte
+         * ca răspunsul să ajungă în browser.
          */
         const startResponse =
           await fetch(
@@ -462,7 +469,7 @@ export default function TestPage() {
                     "start",
 
                   testId:
-                    formattedTest.id,
+                    testMeta.id,
                 }),
             }
           );
@@ -480,8 +487,32 @@ export default function TestPage() {
           );
         }
 
+        const questions =
+          startResult.questions ??
+          [];
+
+        if (
+          startResult.status !==
+            "completed" &&
+          questions.length === 0
+        ) {
+          throw new Error(
+            "Testul activ nu conține întrebări."
+          );
+        }
+
+        const startedTest:
+          ActiveTest = {
+          ...testMeta,
+          questions,
+        };
+
+        setActiveTest(
+          startedTest
+        );
+
         applyProgress(
-          formattedTest,
+          startedTest,
           startResult
         );
       } catch (error) {
