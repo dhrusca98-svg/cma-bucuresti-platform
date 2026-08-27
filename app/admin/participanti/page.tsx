@@ -44,6 +44,7 @@ interface ActivationUser {
   lastSignInAt: string | null;
   activationEmailSentAt: string | null;
   activationEmailSentCount: number;
+  includeInRanking: boolean;
 }
 
 interface ActivationStats {
@@ -133,6 +134,9 @@ export default function ParticipantsAdminPage() {
     useState(false);
 
   const [sendingParticipantId, setSendingParticipantId] =
+    useState<string | null>(null);
+
+  const [rankingParticipantId, setRankingParticipantId] =
     useState<string | null>(null);
 
   const [sendResult, setSendResult] =
@@ -391,6 +395,86 @@ export default function ParticipantsAdminPage() {
     } finally {
       setIsSendingActivation(false);
       setSendingParticipantId(null);
+    }
+  }
+
+  async function handleRankingToggle(user: ActivationUser) {
+    const newValue = !user.includeInRanking;
+
+    const confirmed = window.confirm(
+      newValue
+        ? `Sigur vrei să îl incluzi pe ${user.fullName} în clasament?`
+        : `Sigur vrei să îl excluzi pe ${user.fullName} din clasament?`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setActivationError("");
+    setRankingParticipantId(user.participantId);
+
+    try {
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+
+      if (sessionError || !session?.access_token) {
+        throw new Error(
+          "Trebuie să fii autentificat ca administrator."
+        );
+      }
+
+      const response = await fetch(
+        "/api/admin/participanti/invitatii",
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            participantId: user.participantId,
+            includeInRanking: newValue,
+          }),
+        }
+      );
+
+      const result = (await response.json()) as
+        | {
+            success: true;
+            participantId: string;
+            includeInRanking: boolean;
+          }
+        | { error: string };
+
+      if (!response.ok || "error" in result) {
+        throw new Error(
+          "error" in result
+            ? result.error
+            : "Clasamentul nu a putut fi actualizat."
+        );
+      }
+
+      setActivationUsers((current) =>
+        current.map((participant) =>
+          participant.participantId === result.participantId
+            ? {
+                ...participant,
+                includeInRanking: result.includeInRanking,
+              }
+            : participant
+        )
+      );
+    } catch (error) {
+      setActivationError(
+        error instanceof Error
+          ? error.message
+          : "Clasamentul nu a putut fi actualizat."
+      );
+    } finally {
+      setRankingParticipantId(null);
     }
   }
 
@@ -1169,6 +1253,9 @@ export default function ParticipantsAdminPage() {
                       <th className="px-4 py-3 font-semibold">
                         Status
                       </th>
+                      <th className="px-4 py-3 text-center font-semibold">
+                        Clasament
+                      </th>
                       <th className="px-4 py-3 font-semibold">
                         Email activare
                       </th>
@@ -1182,7 +1269,7 @@ export default function ParticipantsAdminPage() {
                     {filteredActivationUsers.length === 0 && (
                       <tr>
                         <td
-                          colSpan={6}
+                          colSpan={7}
                           className="px-4 py-10 text-center text-sm text-gray-500"
                         >
                           Nu există participanți care să corespundă filtrelor selectate.
@@ -1220,6 +1307,27 @@ export default function ParticipantsAdminPage() {
 
                           <td className="px-4 py-3 text-gray-600">
                             {user.email || "—"}
+                          </td>
+
+                          <td className="px-4 py-3 text-center">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void handleRankingToggle(user)
+                              }
+                              disabled={rankingParticipantId !== null}
+                              className={`inline-flex min-w-[82px] items-center justify-center rounded-full px-3 py-1.5 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                                user.includeInRanking
+                                  ? "bg-green-100 text-green-700 hover:bg-green-200"
+                                  : "bg-red-100 text-red-700 hover:bg-red-200"
+                              }`}
+                            >
+                              {rankingParticipantId === user.participantId
+                                ? "..."
+                                : user.includeInRanking
+                                  ? "Inclus"
+                                  : "Exclus"}
+                            </button>
                           </td>
 
                           <td className="px-4 py-3">

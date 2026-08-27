@@ -10,11 +10,13 @@ interface AttemptRow {
         first_name: string;
         last_name: string;
         active: boolean | null;
+        include_in_ranking: boolean | null;
       }
     | {
         first_name: string;
         last_name: string;
         active: boolean | null;
+        include_in_ranking: boolean | null;
       }[]
     | null;
 }
@@ -34,13 +36,17 @@ function requireEnvironmentVariable(name: string) {
   const value = process.env[name];
 
   if (!value) {
-    throw new Error(`Lipsește variabila de mediu ${name}.`);
+    throw new Error(
+      `Lipsește variabila de mediu ${name}.`
+    );
   }
 
   return value;
 }
 
-function getParticipant(value: AttemptRow["participants"]) {
+function getParticipant(
+  value: AttemptRow["participants"]
+) {
   if (Array.isArray(value)) {
     return value[0] ?? null;
   }
@@ -48,7 +54,10 @@ function getParticipant(value: AttemptRow["participants"]) {
   return value;
 }
 
-function calculateGrade(score: number, totalQuestions: number) {
+function calculateGrade(
+  score: number,
+  totalQuestions: number
+) {
   if (totalQuestions <= 0) {
     return 0;
   }
@@ -58,82 +67,108 @@ function calculateGrade(score: number, totalQuestions: number) {
 
 export async function GET(request: Request) {
   try {
-    const supabaseUrl = requireEnvironmentVariable(
-      "NEXT_PUBLIC_SUPABASE_URL"
-    );
-    const publishableKey = requireEnvironmentVariable(
-      "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"
-    );
-    const secretKey = requireEnvironmentVariable(
-      "SUPABASE_SECRET_KEY"
-    );
-    const adminEmail = requireEnvironmentVariable(
-      "ADMIN_EMAIL"
-    )
-      .trim()
-      .toLowerCase();
+    const supabaseUrl =
+      requireEnvironmentVariable(
+        "NEXT_PUBLIC_SUPABASE_URL"
+      );
+
+    const publishableKey =
+      requireEnvironmentVariable(
+        "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"
+      );
+
+    const secretKey =
+      requireEnvironmentVariable(
+        "SUPABASE_SECRET_KEY"
+      );
+
+    const adminEmail =
+      requireEnvironmentVariable(
+        "ADMIN_EMAIL"
+      )
+        .trim()
+        .toLowerCase();
 
     const authorization =
       request.headers.get("authorization") ?? "";
 
-    const accessToken = authorization.startsWith("Bearer ")
-      ? authorization.slice(7)
-      : "";
+    const accessToken =
+      authorization.startsWith("Bearer ")
+        ? authorization.slice(7)
+        : "";
 
     if (!accessToken) {
       return Response.json(
-        { error: "Trebuie să fii autentificat." },
-        { status: 401 }
+        {
+          error:
+            "Trebuie să fii autentificat.",
+        },
+        {
+          status: 401,
+        }
       );
     }
 
-    const authClient = createClient(
-      supabaseUrl,
-      publishableKey,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-          detectSessionInUrl: false,
-        },
-      }
-    );
+    const authClient =
+      createClient(
+        supabaseUrl,
+        publishableKey,
+        {
+          auth: {
+            autoRefreshToken: false,
+            persistSession: false,
+            detectSessionInUrl: false,
+          },
+        }
+      );
 
     const {
       data: { user },
       error: userError,
-    } = await authClient.auth.getUser(accessToken);
+    } =
+      await authClient.auth.getUser(
+        accessToken
+      );
 
     if (userError || !user) {
       return Response.json(
-        { error: "Sesiunea nu este validă." },
-        { status: 401 }
+        {
+          error:
+            "Sesiunea nu este validă.",
+        },
+        {
+          status: 401,
+        }
       );
     }
 
     if (
-      user.email?.trim().toLowerCase() !== adminEmail
+      user.email?.trim().toLowerCase() !==
+      adminEmail
     ) {
       return Response.json(
         {
           error:
             "Nu ai permisiunea să vezi clasamentul general.",
         },
-        { status: 403 }
+        {
+          status: 403,
+        }
       );
     }
 
-    const adminClient = createClient(
-      supabaseUrl,
-      secretKey,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-          detectSessionInUrl: false,
-        },
-      }
-    );
+    const adminClient =
+      createClient(
+        supabaseUrl,
+        secretKey,
+        {
+          auth: {
+            autoRefreshToken: false,
+            persistSession: false,
+            detectSessionInUrl: false,
+          },
+        }
+      );
 
     const [
       attemptsResult,
@@ -150,7 +185,8 @@ export async function GET(request: Request) {
           participants (
             first_name,
             last_name,
-            active
+            active,
+            include_in_ranking
           )
         `)
         .eq("status", "completed"),
@@ -168,63 +204,90 @@ export async function GET(request: Request) {
           count: "exact",
           head: true,
         })
-        .eq("active", true),
+        .eq("active", true)
+        .eq("include_in_ranking", true),
     ]);
 
     if (attemptsResult.error) {
-      throw new Error(attemptsResult.error.message);
+      throw new Error(
+        attemptsResult.error.message
+      );
     }
 
     if (testsResult.error) {
-      throw new Error(testsResult.error.message);
+      throw new Error(
+        testsResult.error.message
+      );
     }
 
     if (participantsResult.error) {
-      throw new Error(participantsResult.error.message);
+      throw new Error(
+        participantsResult.error.message
+      );
     }
 
     const attempts =
       (attemptsResult.data ?? []) as AttemptRow[];
 
-    const rankingMap = new Map<
-      string,
-      RankingAccumulator
-    >();
+    const rankingMap =
+      new Map<
+        string,
+        RankingAccumulator
+      >();
 
     let totalGrades = 0;
-    let completedAttemptsFromActiveParticipants = 0;
+
+    let completedAttemptsFromRankedParticipants =
+      0;
 
     for (const attempt of attempts) {
-      const participant = getParticipant(
-        attempt.participants
-      );
+      const participant =
+        getParticipant(
+          attempt.participants
+        );
 
-      if (!participant || participant.active !== true) {
+      if (
+        !participant ||
+        participant.active !== true ||
+        participant.include_in_ranking !== true
+      ) {
         continue;
       }
 
-      const grade = calculateGrade(
-        attempt.score,
-        attempt.total_questions
-      );
+      const grade =
+        calculateGrade(
+          attempt.score,
+          attempt.total_questions
+        );
 
       totalGrades += grade;
-      completedAttemptsFromActiveParticipants += 1;
 
-      const existing = rankingMap.get(
-        attempt.participant_id
-      );
+      completedAttemptsFromRankedParticipants +=
+        1;
+
+      const existing =
+        rankingMap.get(
+          attempt.participant_id
+        );
 
       if (existing) {
-        existing.totalPoints += attempt.score;
+        existing.totalPoints +=
+          attempt.score;
+
         existing.maximumPoints +=
           attempt.total_questions;
+
         existing.testsTaken += 1;
+
         existing.gradeSum += grade;
 
         if (
-          new Date(attempt.created_at).getTime() >
-          new Date(existing.latestAttemptAt).getTime()
+          new Date(
+            attempt.created_at
+          ).getTime() >
+          new Date(
+            existing.latestAttemptAt
+          ).getTime()
         ) {
           existing.latestAttemptAt =
             attempt.created_at;
@@ -233,94 +296,149 @@ export async function GET(request: Request) {
         continue;
       }
 
-      rankingMap.set(attempt.participant_id, {
-        participantId: attempt.participant_id,
-        firstName: participant.first_name,
-        lastName: participant.last_name,
-        totalPoints: attempt.score,
-        maximumPoints: attempt.total_questions,
-        testsTaken: 1,
-        gradeSum: grade,
-        latestAttemptAt: attempt.created_at,
-      });
+      rankingMap.set(
+        attempt.participant_id,
+        {
+          participantId:
+            attempt.participant_id,
+
+          firstName:
+            participant.first_name,
+
+          lastName:
+            participant.last_name,
+
+          totalPoints:
+            attempt.score,
+
+          maximumPoints:
+            attempt.total_questions,
+
+          testsTaken: 1,
+
+          gradeSum: grade,
+
+          latestAttemptAt:
+            attempt.created_at,
+        }
+      );
     }
 
-    const ranking = Array.from(
-      rankingMap.values()
-    )
-      .map((participant) => ({
-        participantId: participant.participantId,
-        firstName: participant.firstName,
-        lastName: participant.lastName,
-        fullName:
-          `${participant.lastName} ${participant.firstName}`.trim(),
-        totalPoints: participant.totalPoints,
-        maximumPoints: participant.maximumPoints,
-        testsTaken: participant.testsTaken,
-        publishedTests: testsResult.count ?? 0,
-        participationPercentage:
-          (testsResult.count ?? 0) > 0
-            ? (participant.testsTaken /
-                (testsResult.count ?? 1)) *
-              100
-            : 0,
-        averageGrade:
-          participant.testsTaken > 0
-            ? participant.gradeSum /
-              participant.testsTaken
-            : 0,
-        latestAttemptAt: participant.latestAttemptAt,
-      }))
-      .sort((first, second) => {
-        if (
-          second.totalPoints !== first.totalPoints
-        ) {
-          return (
-            second.totalPoints - first.totalPoints
-          );
-        }
+    const ranking =
+      Array.from(
+        rankingMap.values()
+      )
+        .map(
+          (participant) => ({
+            participantId:
+              participant.participantId,
 
-        if (
-          second.averageGrade !== first.averageGrade
-        ) {
-          return (
-            second.averageGrade - first.averageGrade
-          );
-        }
+            firstName:
+              participant.firstName,
 
-        if (
-          second.testsTaken !== first.testsTaken
-        ) {
-          return (
-            second.testsTaken - first.testsTaken
-          );
-        }
+            lastName:
+              participant.lastName,
 
-        return first.fullName.localeCompare(
-          second.fullName,
-          "ro"
+            fullName:
+              `${participant.lastName} ${participant.firstName}`.trim(),
+
+            totalPoints:
+              participant.totalPoints,
+
+            maximumPoints:
+              participant.maximumPoints,
+
+            testsTaken:
+              participant.testsTaken,
+
+            publishedTests:
+              testsResult.count ?? 0,
+
+            participationPercentage:
+              (testsResult.count ?? 0) > 0
+                ? (participant.testsTaken /
+                    (testsResult.count ?? 1)) *
+                  100
+                : 0,
+
+            averageGrade:
+              participant.testsTaken > 0
+                ? participant.gradeSum /
+                  participant.testsTaken
+                : 0,
+
+            latestAttemptAt:
+              participant.latestAttemptAt,
+          })
+        )
+        .sort(
+          (first, second) => {
+            if (
+              second.totalPoints !==
+              first.totalPoints
+            ) {
+              return (
+                second.totalPoints -
+                first.totalPoints
+              );
+            }
+
+            if (
+              second.averageGrade !==
+              first.averageGrade
+            ) {
+              return (
+                second.averageGrade -
+                first.averageGrade
+              );
+            }
+
+            if (
+              second.testsTaken !==
+              first.testsTaken
+            ) {
+              return (
+                second.testsTaken -
+                first.testsTaken
+              );
+            }
+
+            return first.fullName.localeCompare(
+              second.fullName,
+              "ro"
+            );
+          }
+        )
+        .map(
+          (participant, index) => ({
+            rank: index + 1,
+            ...participant,
+          })
         );
-      })
-      .map((participant, index) => ({
-        rank: index + 1,
-        ...participant,
-      }));
 
     const generalAverageGrade =
-      completedAttemptsFromActiveParticipants > 0
+      completedAttemptsFromRankedParticipants >
+      0
         ? totalGrades /
-          completedAttemptsFromActiveParticipants
+          completedAttemptsFromRankedParticipants
         : 0;
 
     return Response.json({
       ranking,
+
       stats: {
-        publishedTests: testsResult.count ?? 0,
+        publishedTests:
+          testsResult.count ?? 0,
+
         activeParticipants:
           participantsResult.count ?? 0,
-        participantsWithResults: ranking.length,
+
+        participantsWithResults:
+          ranking.length,
+
         totalAttempts:
-          completedAttemptsFromActiveParticipants,
+          completedAttemptsFromRankedParticipants,
+
         generalAverageGrade,
       },
     });
@@ -337,7 +455,9 @@ export async function GET(request: Request) {
             ? error.message
             : "Clasamentul nu a putut fi încărcat.",
       },
-      { status: 500 }
+      {
+        status: 500,
+      }
     );
   }
 }
