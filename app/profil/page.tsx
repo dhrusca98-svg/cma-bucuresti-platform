@@ -19,6 +19,7 @@ interface ProfileHistoryItem {
   grade: number;
   durationSeconds: number | null;
   completedAt: string;
+  reviewAvailable: boolean;
 }
 
 interface ProfileResponse {
@@ -284,6 +285,10 @@ export default function ProfilePage() {
                             <th className="px-5 py-4 text-center font-semibold">
                               Data
                             </th>
+
+                            <th className="px-5 py-4 text-center font-semibold">
+                              Detalii
+                            </th>
                           </tr>
                         </thead>
 
@@ -320,6 +325,21 @@ export default function ProfilePage() {
                                 <td className="px-5 py-4 text-center text-gray-700">
                                   {formatDate(
                                     item.completedAt
+                                  )}
+                                </td>
+
+                                <td className="px-5 py-4 text-center">
+                                  {item.reviewAvailable ? (
+                                    <Link
+                                      href={`/profil/teste/${item.attemptId}`}
+                                      className="inline-flex items-center justify-center rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-green-700"
+                                    >
+                                      Vezi testul
+                                    </Link>
+                                  ) : (
+                                    <span className="text-xs font-semibold text-gray-400">
+                                      Disponibil după închiderea testului
+                                    </span>
                                   )}
                                 </td>
                               </tr>
@@ -367,6 +387,21 @@ export default function ProfilePage() {
                                   item.completedAt
                                 )}
                               />
+                            </div>
+
+                            <div className="mt-4">
+                              {item.reviewAvailable ? (
+                                <Link
+                                  href={`/profil/teste/${item.attemptId}`}
+                                  className="inline-flex w-full items-center justify-center rounded-xl bg-green-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-green-700"
+                                >
+                                  Vezi testul
+                                </Link>
+                              ) : (
+                                <p className="rounded-xl bg-gray-50 px-4 py-3 text-center text-xs font-semibold text-gray-500">
+                                  Răspunsurile corecte devin disponibile după închiderea testului.
+                                </p>
+                              )}
                             </div>
                           </article>
                         )

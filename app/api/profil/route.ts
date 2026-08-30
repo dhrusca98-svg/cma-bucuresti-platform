@@ -4,6 +4,8 @@ interface TestJoin {
   id: string;
   title: string;
   created_at: string;
+  is_active: boolean | null;
+  available_until: string | null;
 }
 
 interface AttemptRow {
@@ -238,7 +240,9 @@ export async function GET(request: Request) {
           tests (
             id,
             title,
-            created_at
+            created_at,
+            is_active,
+            available_until
           )
         `)
         .eq(
@@ -391,6 +395,16 @@ export async function GET(request: Request) {
 
             completedAt:
               attempt.created_at,
+
+            reviewAvailable:
+              test !== null &&
+              (
+                test.is_active !== true ||
+                !test.available_until ||
+                new Date(
+                  test.available_until
+                ).getTime() <= Date.now()
+              ),
           };
         }
       );
