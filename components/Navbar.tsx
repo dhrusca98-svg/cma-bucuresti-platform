@@ -8,6 +8,13 @@ import { supabase } from "@/lib/supabase/client";
 
 export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [regulationsOpen, setRegulationsOpen] =
+    useState(false);
+  const [
+    desktopRegulationsOpen,
+    setDesktopRegulationsOpen,
+  ] = useState(false);
+
   const [isAuthenticated, setIsAuthenticated] =
     useState(false);
 
@@ -16,6 +23,7 @@ export default function Navbar() {
 
   function closeMenu() {
     setMenuOpen(false);
+    setRegulationsOpen(false);
   }
 
   useEffect(() => {
@@ -69,7 +77,6 @@ export default function Navbar() {
     <>
       <header className="relative z-40 border-b border-gray-200 bg-white">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
-
           {/* MOBILE - Hamburger stânga */}
           <button
             type="button"
@@ -125,12 +132,94 @@ export default function Navbar() {
               Test
             </Link>
 
-            <Link
-              href="/legile-jocului"
-              className="transition hover:text-green-700"
+            {/* DESKTOP - Regulamente dropdown */}
+            <div
+              className="relative"
+              onMouseEnter={() =>
+                setDesktopRegulationsOpen(true)
+              }
+              onMouseLeave={() =>
+                setDesktopRegulationsOpen(false)
+              }
             >
-              Legile Jocului
-            </Link>
+              <button
+                type="button"
+                onClick={() =>
+                  setDesktopRegulationsOpen(
+                    (current) => !current
+                  )
+                }
+                className="flex items-center gap-1 transition hover:text-green-700"
+                aria-haspopup="menu"
+                aria-expanded={
+                  desktopRegulationsOpen
+                }
+              >
+                Regulamente
+
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className={`h-4 w-4 transition-transform ${
+                    desktopRegulationsOpen
+                      ? "rotate-180"
+                      : ""
+                  }`}
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="m6 9 6 6 6-6"
+                  />
+                </svg>
+              </button>
+
+              <div
+                className={`absolute left-1/2 top-full z-50 -translate-x-1/2 pt-3 transition ${
+                  desktopRegulationsOpen
+                    ? "pointer-events-auto visible opacity-100"
+                    : "pointer-events-none invisible opacity-0"
+                }`}
+              >
+                <div className="w-56 overflow-hidden rounded-xl border border-gray-200 bg-white py-2 shadow-xl">
+                  <RegulationDesktopLink
+                    href="/regulamente/legile-jocului-2026-2027.pdf"
+                    label="Legile Jocului"
+                    external
+                    onClick={() =>
+                      setDesktopRegulationsOpen(
+                        false
+                      )
+                    }
+                  />
+
+                  <RegulationDesktopLink
+                    href="/regulamente/ROAF.pdf"
+                    label="ROAF"
+                    external
+                    onClick={() =>
+                      setDesktopRegulationsOpen(
+                        false
+                      )
+                    }
+                  />
+
+                  <RegulationDesktopLink
+                    href="/regulamente/RODAAF.pdf"
+                    label="RODAAF"
+                    external
+                    onClick={() =>
+                      setDesktopRegulationsOpen(
+                        false
+                      )
+                    }
+                  />
+                </div>
+              </div>
+            </div>
 
             <Link
               href="/clasament"
@@ -253,11 +342,73 @@ export default function Navbar() {
             onClick={closeMenu}
           />
 
-          <MobileLink
-            href="/legile-jocului"
-            label="Legile Jocului"
-            onClick={closeMenu}
-          />
+          {/* MOBILE - Regulamente */}
+          <div>
+            <button
+              type="button"
+              onClick={() =>
+                setRegulationsOpen(
+                  (current) => !current
+                )
+              }
+              className="flex w-full items-center justify-between rounded-xl px-4 py-4 text-left text-base font-semibold text-gray-800 transition hover:bg-green-50 hover:text-green-700"
+              aria-expanded={regulationsOpen}
+            >
+              <span>Regulamente</span>
+
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className={`h-5 w-5 transition-transform ${
+                  regulationsOpen
+                    ? "rotate-180"
+                    : ""
+                }`}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="m6 9 6 6 6-6"
+                />
+              </svg>
+            </button>
+
+            <div
+              className={`grid transition-all duration-200 ${
+                regulationsOpen
+                  ? "grid-rows-[1fr] opacity-100"
+                  : "grid-rows-[0fr] opacity-0"
+              }`}
+            >
+              <div className="overflow-hidden">
+                <div className="mb-2 ml-3 border-l-2 border-green-100 pl-2">
+                  <RegulationMobileLink
+                    href="/regulamente/legile-jocului-2026-2027.pdf"
+                    label="Legile Jocului"
+                    external
+                    onClick={closeMenu}
+                  />
+
+                  <RegulationMobileLink
+                    href="/regulamente/ROAF.pdf"
+                    label="ROAF"
+                    external
+                    onClick={closeMenu}
+                  />
+
+                  <RegulationMobileLink
+                    href="/regulamente/RODAAF.pdf"
+                    label="RODAAF"
+                    external
+                    onClick={closeMenu}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
 
           <MobileLink
             href="/clasament"
@@ -305,6 +456,71 @@ export default function Navbar() {
         </div>
       </aside>
     </>
+  );
+}
+
+interface RegulationDesktopLinkProps {
+  href: string;
+  label: string;
+  external?: boolean;
+  onClick: () => void;
+}
+
+function RegulationDesktopLink({
+  href,
+  label,
+  external = false,
+  onClick,
+}: RegulationDesktopLinkProps) {
+  return (
+    <Link
+      href={href}
+      target={
+        external ? "_blank" : undefined
+      }
+      rel={
+        external
+          ? "noopener noreferrer"
+          : undefined
+      }
+      onClick={onClick}
+      className="block px-4 py-3 text-sm font-semibold text-gray-700 transition hover:bg-green-50 hover:text-green-700"
+      role="menuitem"
+    >
+      {label}
+    </Link>
+  );
+}
+
+interface RegulationMobileLinkProps {
+  href: string;
+  label: string;
+  external?: boolean;
+  onClick: () => void;
+}
+
+function RegulationMobileLink({
+  href,
+  label,
+  external = false,
+  onClick,
+}: RegulationMobileLinkProps) {
+  return (
+    <Link
+      href={href}
+      target={
+        external ? "_blank" : undefined
+      }
+      rel={
+        external
+          ? "noopener noreferrer"
+          : undefined
+      }
+      onClick={onClick}
+      className="block rounded-xl px-4 py-3.5 text-sm font-semibold text-gray-700 transition hover:bg-green-50 hover:text-green-700"
+    >
+      {label}
+    </Link>
   );
 }
 
