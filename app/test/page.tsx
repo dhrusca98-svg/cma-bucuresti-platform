@@ -448,6 +448,36 @@ export default function TestPage() {
          * timerul server-side este deja pornit înainte
          * ca răspunsul să ajungă în browser.
          */
+        /*
+         * Confirmarea este afișată aici, în pagina /test,
+         * înainte de action: "start". Astfel apare indiferent
+         * de linkul din care participantul ajunge la test, iar
+         * simpla deschidere a paginii NU pornește cronometrul.
+         *
+         * Dacă tentativa este deja în desfășurare, nu mai cerem
+         * confirmarea: participantul trebuie să poată reveni la
+         * test fără să primească din nou mesajul de început.
+         */
+        if (
+          statusResult.status !==
+            "in_progress"
+        ) {
+          const durationLabel =
+            testMeta.durationMinutes === 1
+              ? "1 minut"
+              : `${testMeta.durationMinutes} minute`;
+
+          const confirmed =
+            window.confirm(
+              `Ești pe cale să începi testul „${testMeta.title}”.\n\nDurata testului: ${durationLabel}.\nCronometrul începe imediat după ce apeși OK.\n\nContinui?`
+            );
+
+          if (!confirmed) {
+            router.push("/");
+            return;
+          }
+        }
+
         const startResponse =
           await fetch(
             "/api/test/submit",
