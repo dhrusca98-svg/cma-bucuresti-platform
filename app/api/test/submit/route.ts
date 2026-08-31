@@ -1003,7 +1003,8 @@ export async function POST(
         action?:
           | "start"
           | "answer"
-          | "finish";
+          | "finish"
+          | "expire";
 
         testId?: string;
 
@@ -1677,6 +1678,45 @@ export async function POST(
             attempt.started_at ??
             attempt.created_at,
         },
+      });
+    }
+
+    /*
+     * Browserul poate cere expirarea când countdown-ul local ajunge
+     * la 00:00, dar serverul este singura autoritate pentru timp.
+     * Dacă serverul vede că mai există timp, NU finalizăm tentativa.
+     * Trimitem timpul rămas înapoi pentru resincronizarea clientului.
+     */
+    if (
+      body.action ===
+      "expire"
+    ) {
+      return Response.json({
+        success: true,
+
+        status:
+          "in_progress",
+
+        expired:
+          false,
+
+        attemptId:
+          attempt.id,
+
+        startedAt:
+          attempt.started_at ??
+          attempt.created_at,
+
+        durationSeconds,
+
+        timeLeft:
+          Math.max(
+            0,
+            durationSeconds -
+              getElapsedSeconds(
+                attempt
+              )
+          ),
       });
     }
 

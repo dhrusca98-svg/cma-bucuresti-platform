@@ -176,10 +176,20 @@ export default function TestPage() {
     setExpired,
   ] = useState(false);
 
-  const startedAtRef =
-    useRef<number>(
-      Date.now()
-    );
+  /*
+   * Timerul din browser NU compară ceasul local al dispozitivului
+   * cu started_at de pe server. Ceasul telefonului/laptopului poate
+   * fi înainte sau în urmă și ar putea închide testul prea devreme.
+   *
+   * Păstrăm doar timpul rămas calculat de server și îl decrementăm
+   * local folosind performance.now(), care este monotonic și nu
+   * depinde de ora setată pe dispozitiv.
+   */
+  const timerBaseTimeLeftRef =
+    useRef(0);
+
+  const timerBasePerformanceRef =
+    useRef(0);
 
   const finishingRef =
     useRef(false);
@@ -288,21 +298,21 @@ export default function TestPage() {
           return;
         }
 
-        if (
-          progress.startedAt
-        ) {
-          startedAtRef.current =
-            new Date(
-              progress.startedAt
-            ).getTime();
-        } else {
-          startedAtRef.current =
-            Date.now();
-        }
+        const serverTimeLeft =
+          Math.max(
+            0,
+            progress.timeLeft ??
+              durationSeconds
+          );
+
+        timerBaseTimeLeftRef.current =
+          serverTimeLeft;
+
+        timerBasePerformanceRef.current =
+          window.performance.now();
 
         setTimeLeft(
-          progress.timeLeft ??
-            durationSeconds
+          serverTimeLeft
         );
       },
       []
@@ -695,7 +705,9 @@ export default function TestPage() {
                 body:
                   JSON.stringify({
                     action:
-                      "finish",
+                      wasExpired
+                        ? "expire"
+                        : "finish",
 
                     testId:
                       activeTest.id,
@@ -720,6 +732,42 @@ export default function TestPage() {
               result.error ||
                 "Rezultatul nu a putut fi salvat."
             );
+          }
+
+          /*
+           * Dacă browserul a ajuns la 00:00, nu presupunem că testul
+           * a expirat. Serverul verifică timpul cu propriul ceas.
+           * Dacă mai există timp, resynchronizăm countdown-ul și
+           * păstrăm tentativa deschisă.
+           */
+          if (
+            wasExpired &&
+            result.status ===
+              "in_progress"
+          ) {
+            const serverTimeLeft =
+              Math.max(
+                0,
+                result.timeLeft ??
+                  0
+              );
+
+            timerBaseTimeLeftRef.current =
+              serverTimeLeft;
+
+            timerBasePerformanceRef.current =
+              window.performance.now();
+
+            setTimeLeft(
+              serverTimeLeft
+            );
+
+            setExpired(false);
+
+            finishingRef.current =
+              false;
+
+            return;
           }
 
           if (
@@ -946,8 +994,20 @@ export default function TestPage() {
             typeof result.timeLeft ===
             "number"
           ) {
+            const serverTimeLeft =
+              Math.max(
+                0,
+                result.timeLeft
+              );
+
+            timerBaseTimeLeftRef.current =
+              serverTimeLeft;
+
+            timerBasePerformanceRef.current =
+              window.performance.now();
+
             setTimeLeft(
-              result.timeLeft
+              serverTimeLeft
             );
           }
         } catch (error) {
@@ -1048,13 +1108,12 @@ export default function TestPage() {
     const timer =
       window.setInterval(
         () => {
-          const elapsedSeconds =
+          const elapsedSinceServerSync =
             Math.max(
               0,
               Math.floor(
-                (Date.now() -
-                  startedAtRef
-                    .current) /
+                (window.performance.now() -
+                  timerBasePerformanceRef.current) /
                   1000
               )
             );
@@ -1062,8 +1121,8 @@ export default function TestPage() {
           const remaining =
             Math.max(
               0,
-              totalTime -
-                elapsedSeconds
+              timerBaseTimeLeftRef.current -
+                elapsedSinceServerSync
             );
 
           setTimeLeft(
